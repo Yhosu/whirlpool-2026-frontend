@@ -1,0 +1,479 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ye: #FDC32B;
+  --ye-dp: #F0A81C;
+  --ye-lt: #FFD95E;
+  --bk: #101010;
+  --bk-2: #1E1E1E;
+  --wh: #ffffff;
+  --paper: #FFFBF0;
+  --ink: #2A2418;
+  --muted: #6F6756;
+  --line: #E6DDC6;
+  --disp: "Anton", Impact, sans-serif;
+  --script: "Pacifico", cursive;
+  --body: "Manrope", -apple-system, "Segoe UI", sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Kiosk & Totem Touchscreen ergonomics */
+button, a, input, select, textarea, [role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--ye);
+  color: var(--bk);
+}
+
+/* ============ HERO BACKGROUND RAYS ============ */
+.hero-radial-bg {
+  background: radial-gradient(circle at 50% 18%, var(--ye-lt) 0%, var(--ye) 42%, var(--ye-dp) 100%);
+}
+
+/* ============ LOCKUP STROKES ============ */
+.lockup-special {
+  font-family: var(--disp);
+  color: var(--wh);
+  letter-spacing: 0.012em;
+  -webkit-text-stroke: clamp(5px, 1.5vw, 11px) var(--bk);
+  paint-order: stroke fill;
+  text-shadow: 0 7px 0 rgba(0, 0, 0, 0.22);
+}
+
+.lockup-days {
+  font-family: var(--script);
+  color: var(--ye);
+  -webkit-text-stroke: clamp(4px, 1.1vw, 8px) var(--bk);
+  paint-order: stroke fill;
+  display: block;
+  margin-top: -0.18em;
+}
+
+/* ============ SHIELD & BADGE US ============ */
+.shield-clip {
+  clip-path: polygon(0 0, 100% 0, 100% 64%, 50% 100%, 0 64%);
+}
+
+/* ============ MACHINE 3D & CONIC GRADIENT ============ */
+.door-conic {
+  background: conic-gradient(from 210deg, #9BA0A5, #5C6166, #A8ADB2, #53585C, #9BA0A5);
+}
+
+.door-glass {
+  background: radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0) 48%),
+              radial-gradient(circle at 50% 50%, rgba(8, 8, 8, 0.3), rgba(8, 8, 8, 0.66));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.cavity-bg {
+  background: radial-gradient(circle at 50% 38%, #32363A, #0C0D0E 74%);
+}
+
+.capsule-gold {
+  background: radial-gradient(circle at 32% 26%, #FFF0C0, var(--ye) 46%, #C98A09);
+  box-shadow: inset -3px -4px 7px rgba(0, 0, 0, 0.35);
+}
+
+.prizecap-gold {
+  background: radial-gradient(circle at 32% 26%, #FFF0C0, var(--ye) 46%, #C98A09);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* ============ CONTINUOUS DRUM ROTATION ============ */
+@keyframes drumSpinContinuous {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-drum-idle {
+  animation: drumSpinContinuous 8s linear infinite;
+}
+
+.animate-drum-spin {
+  animation: drumSpinContinuous 0.5s linear infinite;
+}
+
+/* ============ INDIVIDUAL BALL REALISTIC TUMBLE ANIMATIONS ============ */
+@keyframes ballTumble1 {
+  0% { transform: translate(0, 0) rotate(0deg) scale(1); }
+  25% { transform: translate(10px, -14px) rotate(45deg) scale(1.04); }
+  50% { transform: translate(-8px, 12px) rotate(130deg) scale(0.96); }
+  75% { transform: translate(-12px, -8px) rotate(240deg) scale(1.02); }
+  100% { transform: translate(0, 0) rotate(360deg) scale(1); }
+}
+
+@keyframes ballTumble2 {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  30% { transform: translate(-14px, 18px) rotate(-70deg); }
+  60% { transform: translate(12px, 8px) rotate(-190deg); }
+  85% { transform: translate(6px, -12px) rotate(-280deg); }
+  100% { transform: translate(0, 0) rotate(-360deg); }
+}
+
+@keyframes ballTumble3 {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  35% { transform: translate(16px, -20px) rotate(90deg); }
+  70% { transform: translate(8px, 14px) rotate(210deg); }
+  100% { transform: translate(0, 0) rotate(360deg); }
+}
+
+@keyframes ballTumble4 {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(-10px, -14px) rotate(-80deg); }
+  55% { transform: translate(14px, -6px) rotate(-170deg); }
+  80% { transform: translate(6px, 8px) rotate(-270deg); }
+  100% { transform: translate(0, 0) rotate(-360deg); }
+}
+
+@keyframes ballTumble5 {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  30% { transform: translate(12px, -18px) rotate(85deg); }
+  65% { transform: translate(-14px, -10px) rotate(205deg); }
+  100% { transform: translate(0, 0) rotate(360deg); }
+}
+
+@keyframes ballTumble6 {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  40% { transform: translate(-14px, 14px) rotate(-120deg); }
+  75% { transform: translate(-18px, -10px) rotate(-250deg); }
+  100% { transform: translate(0, 0) rotate(-360deg); }
+}
+
+@keyframes ballTumble7 {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  30% { transform: translate(10px, -15px) rotate(75deg); }
+  60% { transform: translate(-12px, -20px) rotate(195deg); }
+  85% { transform: translate(-5px, 6px) rotate(290deg); }
+  100% { transform: translate(0, 0) rotate(360deg); }
+}
+
+.animate-ball-1 { animation: ballTumble1 2.8s ease-in-out infinite; }
+.animate-ball-2 { animation: ballTumble2 2.3s ease-in-out infinite; }
+.animate-ball-3 { animation: ballTumble3 3.1s ease-in-out infinite; }
+.animate-ball-4 { animation: ballTumble4 2.1s ease-in-out infinite; }
+.animate-ball-5 { animation: ballTumble5 2.6s ease-in-out infinite; }
+.animate-ball-6 { animation: ballTumble6 3.4s ease-in-out infinite; }
+.animate-ball-7 { animation: ballTumble7 2.4s ease-in-out infinite; }
+
+/* ============ LIVELY BADGE WOBBLE & FLOAT ============ */
+@keyframes badgeLivelyMove {
+  0%, 100% {
+    transform: translate(0, 0) rotate(-2deg) scale(1);
+  }
+  20% {
+    transform: translate(5px, -9px) rotate(2.5deg) scale(1.05);
+  }
+  40% {
+    transform: translate(-4px, -4px) rotate(-4deg) scale(1.02);
+  }
+  60% {
+    transform: translate(3px, -11px) rotate(3deg) scale(1.06);
+  }
+  80% {
+    transform: translate(-5px, -2px) rotate(-1deg) scale(1.01);
+  }
+}
+
+.animate-badge-lively {
+  animation: badgeLivelyMove 3.8s ease-in-out infinite;
+}
+
+/* ============ DYNAMIC SHORT SHOOTING STARS ============ */
+/* Path 1: Fast diagonal sweep across upper appliances */
+@keyframes starPath1 {
+  0%, 15% {
+    left: 12%;
+    top: 20%;
+    opacity: 0;
+    transform: scale(0.4) rotate(-24deg);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1) rotate(-24deg);
+  }
+  38% {
+    left: 65%;
+    top: 48%;
+    opacity: 1;
+    transform: scale(1.1) rotate(-20deg);
+  }
+  45% {
+    left: 80%;
+    top: 56%;
+    opacity: 0;
+    transform: scale(0.6) rotate(-16deg);
+  }
+  100% {
+    left: 80%;
+    top: 56%;
+    opacity: 0;
+  }
+}
+
+/* Path 2: Short fast streak across top right */
+@keyframes starPath2 {
+  0%, 48% {
+    left: 78%;
+    top: 15%;
+    opacity: 0;
+    transform: scale(0.3) rotate(-12deg);
+  }
+  54% {
+    opacity: 1;
+    transform: scale(1) rotate(-12deg);
+  }
+  68% {
+    left: 35%;
+    top: 32%;
+    opacity: 1;
+    transform: scale(1) rotate(-14deg);
+  }
+  75% {
+    left: 20%;
+    top: 40%;
+    opacity: 0;
+    transform: scale(0.5) rotate(-15deg);
+  }
+  100% {
+    left: 20%;
+    top: 40%;
+    opacity: 0;
+  }
+}
+
+/* Path 3: Quick sparkle comet across center washer */
+@keyframes starPath3 {
+  0%, 72% {
+    left: 28%;
+    top: 38%;
+    opacity: 0;
+    transform: scale(0.4) rotate(-30deg);
+  }
+  77% {
+    opacity: 1;
+    transform: scale(1.1) rotate(-28deg);
+  }
+  88% {
+    left: 86%;
+    top: 52%;
+    opacity: 1;
+    transform: scale(0.9) rotate(-24deg);
+  }
+  94% {
+    left: 95%;
+    top: 58%;
+    opacity: 0;
+    transform: scale(0.5) rotate(-20deg);
+  }
+  100% {
+    left: 95%;
+    top: 58%;
+    opacity: 0;
+  }
+}
+
+.animate-star-1 {
+  animation: starPath1 5.2s cubic-bezier(0.2, 0.6, 0.35, 1) infinite;
+}
+
+.animate-star-2 {
+  animation: starPath2 6.4s cubic-bezier(0.2, 0.6, 0.35, 1) infinite;
+}
+
+.animate-star-3 {
+  animation: starPath3 5.8s cubic-bezier(0.2, 0.6, 0.35, 1) infinite;
+}
+
+/* ============ WATER SLOSHING & SUDS FOR WASHING MACHINE ============ */
+@keyframes waterWaveSlosh {
+  0% { transform: translateX(0) scaleY(1); }
+  50% { transform: translateX(-25%) scaleY(1.08); }
+  100% { transform: translateX(-50%) scaleY(1); }
+}
+
+@keyframes waterVortex {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.15); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+@keyframes sudsFroth {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 0.85; }
+  50% { transform: translateY(-3px) scale(1.06); opacity: 0.98; }
+}
+
+.animate-water-slosh {
+  animation: waterWaveSlosh 3.2s ease-in-out infinite;
+}
+
+.animate-water-vortex {
+  animation: waterVortex 0.7s linear infinite;
+}
+
+.animate-suds-froth {
+  animation: sudsFroth 2.4s ease-in-out infinite;
+}
+
+/* ============ LIVELY BUTTON SHIMMER & GLOW ============ */
+@keyframes btnShimmer {
+  0% { transform: translateX(-150%) skewX(-20deg); }
+  35%, 100% { transform: translateX(250%) skewX(-20deg); }
+}
+
+.animate-btn-shimmer {
+  animation: btnShimmer 3.2s ease-in-out infinite;
+}
+
+/* ============ WATER SPILL & FLOOR SPLASH ANIMATIONS ============ */
+@keyframes waterGushFall {
+  0% {
+    transform: translateY(-20px) scaleY(0.2) scaleX(0.5);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.95;
+    transform: translateY(10px) scaleY(1.2) scaleX(1);
+  }
+  70% {
+    opacity: 0.85;
+    transform: translateY(35px) scaleY(1) scaleX(1.4);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(50px) scaleY(0.6) scaleX(1.8);
+  }
+}
+
+@keyframes waterFloorSpread {
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  40% {
+    transform: scale(1.1);
+    opacity: 0.88;
+  }
+  75% {
+    transform: scale(1.4);
+    opacity: 0.65;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes waterMistDissolve {
+  0% {
+    opacity: 0.9;
+    filter: blur(4px);
+    transform: scale(1);
+  }
+  60% {
+    opacity: 0.4;
+    filter: blur(14px);
+    transform: scale(1.3) translateY(-15px);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(24px);
+    transform: scale(1.6) translateY(-30px);
+  }
+}
+
+.animate-water-gush {
+  animation: waterGushFall 1.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-water-spread {
+  animation: waterFloorSpread 1.4s ease-out forwards;
+}
+
+.animate-mist-dissolve {
+  animation: waterMistDissolve 1.2s ease-out forwards;
+}
+
+/* ============ GLOWING WASHER DRUM RIM KEYFRAMES ============ */
+@keyframes drumRimGlow {
+  0% {
+    box-shadow: 0 0 10px rgba(253, 195, 43, 0.75), 0 0 20px rgba(255, 217, 94, 0.5), inset 0 0 8px rgba(255, 255, 255, 0.4);
+    border-color: rgba(255, 226, 122, 0.85);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(253, 195, 43, 1), 0 0 32px rgba(255, 226, 122, 0.8), 0 0 45px rgba(253, 195, 43, 0.45), inset 0 0 14px rgba(255, 255, 255, 0.75);
+    border-color: #FFFFFF;
+  }
+  100% {
+    box-shadow: 0 0 12px rgba(253, 195, 43, 0.8), 0 0 22px rgba(255, 217, 94, 0.55), inset 0 0 9px rgba(255, 255, 255, 0.45);
+    border-color: rgba(255, 235, 150, 0.95);
+  }
+}
+
+@keyframes drumRimSpinPulse {
+  0% {
+    box-shadow: 0 0 16px #FDC32B, 0 0 28px #FFE27A, inset 0 0 10px #FFFFFF;
+    border-color: #FFE27A;
+  }
+  100% {
+    box-shadow: 0 0 25px #FDC32B, 0 0 45px #FFD95E, 0 0 60px rgba(253, 195, 43, 0.8), inset 0 0 18px #FFFFFF;
+    border-color: #FFFFFF;
+  }
+}
+
+/* ============ GLOWING WASHER DIGITAL SCREEN KEYFRAMES ============ */
+@keyframes washerScreenGlow {
+  0% {
+    box-shadow: 0 0 16px rgba(0, 229, 255, 0.7), inset 0 0 12px rgba(0, 229, 255, 0.35);
+    border-color: rgba(0, 229, 255, 0.85);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(253, 195, 43, 0.95), 0 0 10px rgba(255, 255, 255, 0.9), inset 0 0 18px rgba(253, 195, 43, 0.5);
+    border-color: rgba(253, 195, 43, 0.95);
+  }
+  100% {
+    box-shadow: 0 0 16px rgba(0, 229, 255, 0.7), inset 0 0 12px rgba(0, 229, 255, 0.35);
+    border-color: rgba(0, 229, 255, 0.85);
+  }
+}
+
+.animate-screen-glow {
+  animation: washerScreenGlow 2.4s ease-in-out infinite;
+}
+
+@keyframes bounceSubtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.animate-bounce-subtle {
+  animation: bounceSubtle 1.8s ease-in-out infinite;
+}
+
+
