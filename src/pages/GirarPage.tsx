@@ -405,6 +405,7 @@ export const GirarPage: React.FC = () => {
                   }}
                   hasActiveCode={!!activeCodeData}
                   isIdle={!isDoorOpenTest && machinePhase === 'idle'}
+                  showCodePrompt={true}
                   showTopCoin={false}
                 />
               </div>

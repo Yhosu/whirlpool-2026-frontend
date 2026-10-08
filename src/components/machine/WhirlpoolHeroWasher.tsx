@@ -22,6 +22,7 @@ interface WhirlpoolHeroWasherProps {
   onControlScreenClick?: () => void;
   hasActiveCode?: boolean;
   isIdle?: boolean;
+  showCodePrompt?: boolean;
   className?: string;
 }
 
@@ -37,6 +38,7 @@ export const WhirlpoolHeroWasher: React.FC<WhirlpoolHeroWasherProps> = ({
   onControlScreenClick,
   hasActiveCode = false,
   isIdle = true,
+  showCodePrompt = false,
   className = '',
 }) => {
   // Water drainage sequence: 'none' -> 'flushing' -> 'draining' -> 'drained'
@@ -127,49 +129,51 @@ export const WhirlpoolHeroWasher: React.FC<WhirlpoolHeroWasherProps> = ({
 
       {/* ================= 0. PANTALLA DIGITAL DE CONTROL (TOUCHSCREEN HOTSPOT) ================= */}
       {/* Ubicada con cálculo milimétrico sobre el rectángulo completo de la pantalla (62.5% X, 2.9% Y, 28.8% W, 11.2% H) */}
-      <div
-        className="absolute z-[26]"
-        style={{
-          left: '62.5%',
-          top: '2.9%',
-          width: '28.8%',
-          height: '11.2%',
-        }}
-      >
-        <button
-          type="button"
-          onClick={onControlScreenClick}
-          aria-label="Pantalla de control digital Whirlpool: Clic para introducir código"
-          className="w-full h-full relative rounded-[6px] cursor-pointer group focus:outline-none transition-transform active:scale-[0.98]"
+      {onControlScreenClick && (
+        <div
+          className="absolute z-[26]"
+          style={{
+            left: '62.5%',
+            top: '2.9%',
+            width: '28.8%',
+            height: '11.2%',
+          }}
         >
-          {/* Borde ultra-brillante con resplandor neón cyan + oro reflectante (animate-screen-glow) */}
-          <div className="absolute -inset-[3px] rounded-[8px] border-[2.5px] border-white animate-screen-glow pointer-events-none transition-all group-hover:border-[#FDC32B] group-hover:shadow-[0_0_30px_rgba(253,195,43,1),0_0_65px_rgba(0,229,255,0.95),inset_0_0_20px_rgba(255,255,255,1)]" />
-
-          {/* Destello de cristal iluminado con gradiente translúcido */}
-          <div className="absolute inset-0 rounded-[5px] bg-gradient-to-tr from-cyan-400/25 via-white/15 to-amber-300/20 backdrop-brightness-125 transition-opacity group-hover:opacity-100 pointer-events-none" />
-
-          {/* Línea de escaneo / brillo tenue diagonal constante */}
-          <div className="absolute inset-0 rounded-[5px] overflow-hidden pointer-events-none">
-            <div className="w-[200%] h-full bg-gradient-to-r from-transparent via-white/35 to-transparent -translate-x-full animate-btn-shimmer" />
-          </div>
-        </button>
-
-        {/* Flecha animada llamativa señalando la pantalla: "Click aquí para introducir el código" */}
-        {!hasActiveCode && isIdle && (
-          <div
+          <button
+            type="button"
             onClick={onControlScreenClick}
-            className="absolute -top-10 sm:-top-12 right-0 sm:right-1 z-30 cursor-pointer flex flex-col items-center animate-bounce-subtle pointer-events-auto"
+            aria-label="Pantalla de control digital Whirlpool: Clic para introducir código"
+            className="w-full h-full relative rounded-[6px] cursor-pointer group focus:outline-none transition-transform active:scale-[0.98]"
           >
-            <div className="bg-[#101010] text-[#FDC32B] border-2 border-[#FDC32B] text-[10px] sm:text-xs font-black uppercase tracking-wider px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl shadow-[0_6px_22px_rgba(0,0,0,0.7)] whitespace-nowrap flex items-center gap-1.5 hover:scale-105 transition-transform">
-              <span className="w-2 h-2 rounded-full bg-[#FDC32B] animate-ping" />
-              <span className="hidden sm:inline">Click aquí para introducir el código</span>
-              <span className="inline sm:hidden">Toca para ingresar código</span>
+            {/* Borde ultra-brillante con resplandor neón cyan + oro reflectante (animate-screen-glow) */}
+            <div className="absolute -inset-[3px] rounded-[8px] border-[2.5px] border-white animate-screen-glow pointer-events-none transition-all group-hover:border-[#FDC32B] group-hover:shadow-[0_0_30px_rgba(253,195,43,1),0_0_65px_rgba(0,229,255,0.95),inset_0_0_20px_rgba(255,255,255,1)]" />
+
+            {/* Destello de cristal iluminado con gradiente translúcido */}
+            <div className="absolute inset-0 rounded-[5px] bg-gradient-to-tr from-cyan-400/25 via-white/15 to-amber-300/20 backdrop-brightness-125 transition-opacity group-hover:opacity-100 pointer-events-none" />
+
+            {/* Línea de escaneo / brillo tenue diagonal constante */}
+            <div className="absolute inset-0 rounded-[5px] overflow-hidden pointer-events-none">
+              <div className="w-[200%] h-full bg-gradient-to-r from-transparent via-white/35 to-transparent -translate-x-full animate-btn-shimmer" />
             </div>
-            {/* Punta de flecha hacia abajo */}
-            <div className="w-0 h-0 border-x-[6px] border-x-transparent border-t-[8px] border-t-[#FDC32B] -mt-[1px]" />
-          </div>
-        )}
-      </div>
+          </button>
+
+          {/* Flecha animada llamativa señalando la pantalla: "Click aquí para introducir el código" */}
+          {showCodePrompt && !hasActiveCode && isIdle && (
+            <div
+              onClick={onControlScreenClick}
+              className="absolute -top-10 sm:-top-12 right-0 sm:right-1 z-30 cursor-pointer flex flex-col items-center animate-bounce-subtle pointer-events-auto"
+            >
+              <div className="bg-[#101010] text-[#FDC32B] border-2 border-[#FDC32B] text-[10px] sm:text-xs font-black uppercase tracking-wider px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl shadow-[0_6px_22px_rgba(0,0,0,0.7)] whitespace-nowrap flex items-center gap-1.5 hover:scale-105 transition-transform">
+                <span className="w-2 h-2 rounded-full bg-[#FDC32B] animate-ping" />
+                <span className="hidden sm:inline">Click aquí para introducir el código</span>
+                <span className="inline sm:hidden">Toca para ingresar código</span>
+              </div>
+              {/* Punta de flecha hacia abajo */}
+              <div className="w-0 h-0 border-x-[6px] border-x-transparent border-t-[8px] border-t-[#FDC32B] -mt-[1px]" />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ================= 3. TAPA DE LA LAVADORA EN 3D (TAPA DE LAVADORA 1.PNG) ================= */}
       {/* Tapa transparente con refracción y bisagra a la izquierda que se abre en perspectiva 3D */}
