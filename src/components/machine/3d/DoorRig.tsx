@@ -1,7 +1,8 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { MeshTransmissionMaterial } from '@react-three/drei';
+import tapaImg from '../../../assets/Tapa de lavadora 1.png';
 
 interface DoorRigProps {
   doorAngle?: number; // In radians: 0 = closed, -1.95 = fully open
@@ -10,6 +11,13 @@ interface DoorRigProps {
 
 export const DoorRig: React.FC<DoorRigProps> = ({ doorAngle = 0, doorAngleRef }) => {
   const hingeGroupRef = useRef<THREE.Group>(null);
+
+  // Load the authentic Whirlpool transparent glass door lid texture
+  const tapaTexture = useMemo(() => {
+    const tex = new THREE.TextureLoader().load(tapaImg);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }, []);
 
   // Smoothly update hinge angle in frame loop at native 60fps without React re-renders
   useFrame(() => {
@@ -88,6 +96,22 @@ export const DoorRig: React.FC<DoorRigProps> = ({ doorAngle = 0, doorAngleRef })
               color="#FFFFFF"
               attenuationColor="#E0F2FE"
               attenuationDistance={1.8}
+            />
+          </mesh>
+
+          {/* Authentic Whirlpool Glass Door graphic disk */}
+          <mesh position={[0, 0, 0.002]}>
+            <circleGeometry args={[0.59, 48]} />
+            <meshPhysicalMaterial
+              map={tapaTexture}
+              transparent
+              opacity={0.88}
+              roughness={0.06}
+              metalness={0.05}
+              clearcoat={1.0}
+              clearcoatRoughness={0.05}
+              depthWrite={false}
+              side={THREE.DoubleSide}
             />
           </mesh>
 

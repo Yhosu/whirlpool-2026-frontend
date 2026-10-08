@@ -253,10 +253,10 @@ export const WashingMachine: React.FC<WashingMachineProps> = ({
         <meshStandardMaterial color="#1D2025" roughness={0.3} metalness={0.85} />
       </mesh>
 
-      {/* Mandatory Signature Glowing Golden Rim around Drum opening (#FFAA00 / #FDC32B) */}
+      {/* Dark Chrome Accent Bezel around Drum opening (Realistic, no weird glow) */}
       <mesh position={[0, -0.06, 0.925]}>
-        <torusGeometry args={[0.67, 0.016, 16, 64]} />
-        <meshBasicMaterial color="#FDC32B" />
+        <torusGeometry args={[0.67, 0.014, 16, 64]} />
+        <meshStandardMaterial color="#2B3038" roughness={0.22} metalness={0.92} />
       </mesh>
 
       {/* Dark Flexible Rubber Gasket Bellow */}
@@ -323,17 +323,17 @@ export const WashingMachine: React.FC<WashingMachineProps> = ({
           ))}
         </group>
 
-        {/* ================= 5. WARM INTERIOR ACCENT GLOW ================= */}
-        {/* Mandatory warm emissive ring inside drum (#FFAA00) */}
+        {/* ================= 5. CLEAN NEUTRAL DRUM INTERIOR ILLUMINATION ================= */}
+        {/* Stainless steel interior rim accent */}
         <mesh position={[0, 0, -0.3]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.58, 0.015, 12, 36]} />
-          <meshBasicMaterial color="#FFAA00" />
+          <torusGeometry args={[0.58, 0.012, 12, 36]} />
+          <meshStandardMaterial color="#A4ADB8" roughness={0.3} metalness={0.8} />
         </mesh>
         <pointLight
           position={[0, 0.35, 0.1]}
-          color="#FFAA00"
-          intensity={drumLightIntensity}
-          distance={2.8}
+          color="#EBF4FE"
+          intensity={Math.min(1.2, drumLightIntensity * 0.5)}
+          distance={2.6}
           decay={2}
         />
       </group>

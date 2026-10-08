@@ -420,33 +420,6 @@ button, a, input, select, textarea, [role="button"] {
   animation: waterMistDissolve 1.2s ease-out forwards;
 }
 
-/* ============ GLOWING WASHER DRUM RIM KEYFRAMES ============ */
-@keyframes drumRimGlow {
-  0% {
-    box-shadow: 0 0 10px rgba(253, 195, 43, 0.75), 0 0 20px rgba(255, 217, 94, 0.5), inset 0 0 8px rgba(255, 255, 255, 0.4);
-    border-color: rgba(255, 226, 122, 0.85);
-  }
-  50% {
-    box-shadow: 0 0 18px rgba(253, 195, 43, 1), 0 0 32px rgba(255, 226, 122, 0.8), 0 0 45px rgba(253, 195, 43, 0.45), inset 0 0 14px rgba(255, 255, 255, 0.75);
-    border-color: #FFFFFF;
-  }
-  100% {
-    box-shadow: 0 0 12px rgba(253, 195, 43, 0.8), 0 0 22px rgba(255, 217, 94, 0.55), inset 0 0 9px rgba(255, 255, 255, 0.45);
-    border-color: rgba(255, 235, 150, 0.95);
-  }
-}
-
-@keyframes drumRimSpinPulse {
-  0% {
-    box-shadow: 0 0 16px #FDC32B, 0 0 28px #FFE27A, inset 0 0 10px #FFFFFF;
-    border-color: #FFE27A;
-  }
-  100% {
-    box-shadow: 0 0 25px #FDC32B, 0 0 45px #FFD95E, 0 0 60px rgba(253, 195, 43, 0.8), inset 0 0 18px #FFFFFF;
-    border-color: #FFFFFF;
-  }
-}
-
 /* ============ GLOWING WASHER DIGITAL SCREEN KEYFRAMES ============ */
 @keyframes washerScreenGlow {
   0% {
@@ -476,4 +449,266 @@ button, a, input, select, textarea, [role="button"] {
   animation: bounceSubtle 1.8s ease-in-out infinite;
 }
 
+/* ============ STRICT CIRCULAR CLIPPING FOR 3D WASHER DRUM ============ */
+.washer-drum-circle,
+.washer-drum-circle canvas,
+.washer-drum-circle > div {
+  border-radius: 50% !important;
+  clip-path: circle(50% at 50% 50%) !important;
+  -webkit-clip-path: circle(50% at 50% 50%) !important;
+  mask-image: radial-gradient(circle, #000000 99.5%, transparent 100%) !important;
+  -webkit-mask-image: radial-gradient(circle, #000000 99.5%, transparent 100%) !important;
+  overflow: hidden !important;
+}
+
+/* ============ REALISTIC WATER DRAINAGE & FLOOR SPLASH KEYFRAMES ============ */
+@keyframes waterFlowDown {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 0 96px;
+  }
+}
+
+@keyframes waterDrainOut {
+  0% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  70% {
+    transform: scaleY(0.4) translateY(20%);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scaleY(0) translateY(50%);
+    opacity: 0;
+  }
+}
+
+@keyframes puddleDissolve {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  25% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  65% {
+    transform: scale(1.15);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(1.3);
+    opacity: 0;
+  }
+}
+
+@keyframes waterRippleExpand {
+  0% {
+    transform: scale(0.2);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@keyframes splashDropletUp {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  60% {
+    transform: translate(var(--drop-x, 15px), var(--drop-y, -25px)) scale(1.1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(calc(var(--drop-x, 15px) * 1.5), 10px) scale(0.5);
+    opacity: 0;
+  }
+}
+
+@keyframes ballEjectAndBounce {
+  0% {
+    transform: scale(0.3) translateY(-40%) rotateX(25deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1) translateY(10%) rotateX(0deg);
+    opacity: 1;
+  }
+  75% {
+    transform: scale(1.3) translateY(24%);
+  }
+  88% {
+    transform: scale(1.32) translateY(20%);
+  }
+  100% {
+    transform: scale(1.3) translateY(24%);
+    opacity: 1;
+  }
+}
+
+@keyframes puddleSpillSpread {
+  0% {
+    transform: translate(-50%, 0) scale(0.2, 0.35);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  85% {
+    transform: translate(-50%, 0) scale(1.04, 1.02);
+  }
+  100% {
+    transform: translate(-50%, 0) scale(1, 1);
+    opacity: 1;
+  }
+}
+
+.animate-puddle-spread {
+  animation: puddleSpillSpread 1.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: 50% 30%;
+}
+
+@keyframes waterBallEject {
+  0% {
+    transform: translateY(-135px) scale(0.35) rotate(-28deg);
+    opacity: 0;
+  }
+  52% {
+    transform: translateY(-12px) scale(1.08) rotate(8deg);
+    opacity: 1;
+  }
+  76% {
+    transform: translateY(6px) scale(0.96) rotate(-2deg);
+  }
+  100% {
+    transform: translateY(0px) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.animate-water-ball-eject {
+  animation: waterBallEject 1.05s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes ballWaterFloat {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-7px) rotate(1.2deg);
+  }
+}
+
+.animate-ball-float {
+  animation: ballWaterFloat 3.2s ease-in-out infinite;
+}
+
+@keyframes causticWaveShift {
+  0% {
+    transform: translateX(-3%) translateY(-2%) scale(1);
+    opacity: 0.65;
+  }
+  50% {
+    transform: translateX(3%) translateY(2%) scale(1.04);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateX(-3%) translateY(-2%) scale(1);
+    opacity: 0.65;
+  }
+}
+
+.animate-caustic-waves {
+  animation: causticWaveShift 4s ease-in-out infinite;
+}
+
+@keyframes doorRingShimmer {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-door-shimmer {
+  animation: doorRingShimmer 1.8s linear infinite;
+}
+
+@keyframes doorGlowPulse {
+  0%, 100% {
+    box-shadow: 0 0 28px rgba(253, 195, 43, 0.85), 0 0 55px rgba(0, 229, 255, 0.55), inset 0 0 18px rgba(255, 255, 255, 0.8);
+    opacity: 0.88;
+  }
+  50% {
+    box-shadow: 0 0 42px rgba(253, 195, 43, 1), 0 0 85px rgba(0, 229, 255, 0.8), inset 0 0 28px rgba(255, 255, 255, 1);
+    opacity: 1;
+  }
+}
+
+.animate-door-glow {
+  animation: doorGlowPulse 1.1s ease-in-out infinite;
+}
+
+/* ============ PANTALLA DIGITAL BRILLANTE / RESPLANDECIENTE ============ */
+@keyframes screenPulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 14px rgba(255, 255, 255, 0.95), 0 0 28px rgba(0, 229, 255, 0.8), 0 0 45px rgba(253, 195, 43, 0.55), inset 0 0 10px rgba(255, 255, 255, 0.7);
+    border-color: #FFFFFF;
+    opacity: 0.95;
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(255, 255, 255, 1), 0 0 50px rgba(0, 229, 255, 0.95), 0 0 70px rgba(253, 195, 43, 0.8), inset 0 0 18px rgba(255, 255, 255, 0.9);
+    border-color: #FDC32B;
+    opacity: 1;
+  }
+}
+
+.animate-screen-glow {
+  animation: screenPulseGlow 1.4s ease-in-out infinite;
+}
+
+/* ============ CROSS-BROWSER HARDWARE-ACCELERATED LED GLOW ============ */
+.led-glow-active {
+  fill: #ffffff;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 10px rgba(0, 229, 255, 0.85));
+  -webkit-filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 10px rgba(0, 229, 255, 0.85));
+  will-change: filter;
+}
+
+.play-btn-glow {
+  filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 14px rgba(0, 229, 255, 0.8));
+  -webkit-filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 14px rgba(0, 229, 255, 0.8));
+  will-change: filter;
+}
+
+/* GPU hardware compositing layer hint for smooth animations across all devices */
+.gpu-accelerated {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* ============ RESPONSIVE WASHER CONTAINER (CELULARES, TABLETS Y TÓTEMS) ============ */
+/* En celulares, tablets y tótems (portrait o dispositivos táctiles no-desktop):
+   La lavadora toma el 100% del ancho disponible para una escala imponente y monumental */
+.washer-stage-container {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* En pantallas web de escritorio panorámicas (desktop landscape >= 1024px):
+   Conserva el ancho de escritorio estándar balanceado y ergonómico */
+@media (min-width: 1024px) and (orientation: landscape) {
+  .washer-stage-container {
+    width: min(98vw, calc(86vh * 563 / 794), 840px);
+  }
+}
 

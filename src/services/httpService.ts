@@ -75,15 +75,36 @@ export interface MarkAsUsedPayload {
   control_code?: string; // Optional security verification
 }
 
-export interface BackendMarkAsUsedData {
+export interface BackendPrize {
+  id: string; // UUID e.g. "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+  name: string; // e.g. "Premio 500 Bs"
+  amount: string; // e.g. "500.00"
+  description?: string;
+  active?: boolean;
+}
+
+export interface BackendBranch {
   id: string;
+  name: string;
+  channel: string; // "ECOMMERCE" | "MAYORISTA"
+  city: string;
+}
+
+export interface BackendMarkAsUsedData {
+  id: string; // Form UUID
   code: string;
+  name?: string;
+  ci_number?: string;
+  cellphone?: string;
+  city?: string;
   status: 'used';
+  type?: 'dismac' | 'informal-market' | string;
   is_scratched?: number;
-  prize?: {
-    id: number;
-    name: string;
-  };
+  prize_id?: string;
+  branch_id?: string;
+  control_code?: string;
+  prize: BackendPrize;
+  branch?: BackendBranch;
 }
 
 export interface InformalMarketFormPayload {
@@ -128,10 +149,11 @@ export interface OtroDistribuidorPayload {
 }
 
 export interface PremioCanjeado {
-  id: string;
+  id: string; // Form UUID
   intentoNumero: number;
-  premio: string; // e.g. "Bs. 1.000" o "Microondas Whirlpool 20L"
+  premio: string; // e.g. "Premio 500 Bs"
   monto?: number;
+  prizeId?: string; // UUID del premio asignado por el backend
   tipoPremio: 'vale_dismac' | 'efectivo_transferencia';
   fecha: string;
   ticketId: string;
@@ -293,10 +315,8 @@ class HttpService {
               estado: 'used',
             }));
 
-            // Determinar premio del siguiente intento si aún tiene formularios registrados
+            // Determinar formularios registrados e historial
             const currentForm = (data.last_form || (data.registered_forms && data.registered_forms[0])) as any;
-            const prizeName = currentForm?.prize?.name || 'Bs. 3.000';
-            const isJackpot = prizeName.includes('3000') || prizeName.includes('3.000');
             const registeredCount = data.registered_count ?? (data.registered_forms ? data.registered_forms.length : 0);
 
             const result: VerificarCodigoResult = {
@@ -308,16 +328,7 @@ class HttpService {
               nombreCliente: lastForm?.name || fallbackItem?.name,
               tienda: lastForm?.branch?.name || fallbackItem?.branch?.name || (lastForm?.business_unit ?? 'Whirlpool Oficial'),
               intentosDisponibles: registeredCount,
-              proximoPremio:
-                registeredCount > 0 && currentForm
-                  ? {
-                      intentoNumero: (data.used_count || 0) + 1,
-                      premio: prizeName,
-                      monto: isJackpot ? 3000 : (currentForm?.prize?.amount ? parseFloat(String(currentForm.prize.amount)) : 1000),
-                      isJackpot,
-                      tipoPremio: 'vale_dismac',
-                    }
-                  : null,
+              proximoPremio: null, // Asignado exclusivamente al terminar el giro mediante POST /api/mark-as-used
               premiosCanjeados: historialPremios,
             };
 
@@ -338,16 +349,26 @@ class HttpService {
             };
           }
         }
-      } catch {
-        // Fallback offline / desarrollo local si el backend no responde
+      } catch (err: any) {
+        return {
+          process: false,
+          success: false,
+          message: err?.message || 'Error de conexión con el servidor.',
+          errors: [err?.message || 'No se pudo conectar al servidor.'],
+        };
       }
 
-      // Simulación offline si el servidor no está accesible
-      return this.simularVerificarCodigo(cleanCode);
+      // Si no hubo datos válidos ni respuesta positiva del backend
+      return {
+        process: false,
+        success: false,
+        message: 'No se encontraron registros para el código ingresado.',
+        errors: ['Código no encontrado.'],
+      };
     },
 
     /**
-     * Marca intento como utilizado invocando POST /api/mark-as-used y sincroniza el estado real
+     * Marca intento como utilizado invocando POST /api/mark-as-used y devuelve el premio ganador asignado por el backend
      */
     completarGiro: async (
       codigo: string,
@@ -356,82 +377,91 @@ class HttpService {
       controlCode?: string,
       intentosDisponiblesActuales?: number
     ): Promise<ApiResponse<{
-      success: boolean;
       premio: PremioCanjeado;
+      rawMarkData?: BackendMarkAsUsedData;
       intentosRestantes: number;
       updatedCodeData?: VerificarCodigoResult;
     }>> => {
       const cleanCode = codigo.trim().toUpperCase();
       const lookupCode = controlCode?.trim().toUpperCase() || cleanCode;
 
-      // Si tenemos el UUID real del formulario de last_form.id, llamamos al backend
-      if (lastFormId) {
-        try {
-          const markRes = await this.api.markAsUsed({
-            id: lastFormId,
-            control_code: controlCode,
-          });
-
-          if (markRes.success && markRes.data) {
-            const data = markRes.data;
-            const now = new Date();
-            const formattedDate = `${now.toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' })} ${now.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })}`;
-
-            const premioCanjeado: PremioCanjeado = {
-              id: data.id,
-              intentoNumero,
-              premio: data.prize?.name || 'Premio Whirlpool',
-              tipoPremio: 'vale_dismac',
-              fecha: formattedDate,
-              ticketId: data.code,
-              controlCode: controlCode || cleanCode,
-              estado: 'used',
-            };
-
-            // Consultar inmediatamente el backend para sincronizar el estado real (siguiente formulario, contador exacto, etc.)
-            let updatedCodeData: VerificarCodigoResult | undefined = undefined;
-            let intentosRestantes = 0;
-
-            try {
-              const fresh = await this.girar.verificarCodigo(lookupCode);
-              if (fresh.success && fresh.data) {
-                updatedCodeData = fresh.data;
-                intentosRestantes = fresh.data.intentosDisponibles;
-              } else if (fresh.data) {
-                updatedCodeData = {
-                  ...fresh.data,
-                  intentosDisponibles: 0,
-                  proximoPremio: null,
-                };
-                intentosRestantes = 0;
-              }
-            } catch {
-              // Si falla la re-consulta, decrementamos manualmente
-              intentosRestantes = Math.max(0, (intentosDisponiblesActuales ?? 1) - 1);
-            }
-
-            if (!updatedCodeData) {
-              intentosRestantes = Math.max(0, (intentosDisponiblesActuales ?? 1) - 1);
-            }
-
-            return {
-              process: true,
-              success: true,
-              data: {
-                success: true,
-                premio: premioCanjeado,
-                intentosRestantes,
-                updatedCodeData,
-              },
-              message: markRes.message,
-            };
-          }
-        } catch {
-          // Fallback
-        }
+      // Validación de id obligatorio
+      if (!lastFormId) {
+        return {
+          process: false,
+          success: false,
+          statusCode: 422,
+          message: 'Error de validación en los parámetros enviados.',
+          errors: ['El campo id es obligatorio.'],
+        };
       }
 
-      return this.simularCompletarGiro(cleanCode, intentoNumero);
+      // 1. Invocar POST /api/mark-as-used
+      const markRes = await this.api.markAsUsed({
+        id: lastFormId,
+        control_code: controlCode || undefined,
+      });
+
+      // 2. Si el backend responde con error (Sin stock, ya utilizado, etc.) o no hay premio:
+      // NUNCA generar premios por defecto ni valores ficticios. Retornar el error exacto recibido.
+      if (!markRes.success || !markRes.data || !markRes.data.prize) {
+        return {
+          process: false,
+          success: false,
+          statusCode: markRes.statusCode || 400,
+          message: markRes.message || markRes.errors?.[0] || 'No se pudo completar el giro.',
+          errors: markRes.errors && markRes.errors.length > 0 ? markRes.errors : [markRes.message || 'Error al procesar el premio.'],
+          data: markRes.data as any,
+        };
+      }
+
+      // 3. Extraer el premio real devuelto por el backend
+      const data = markRes.data;
+      const now = new Date();
+      const formattedDate = `${now.toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' })} ${now.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })}`;
+
+      const prizeName = data.prize.name;
+      const prizeAmountNum = data.prize.amount ? parseFloat(String(data.prize.amount)) : 0;
+
+      const premioCanjeado: PremioCanjeado = {
+        id: data.id,
+        intentoNumero,
+        premio: prizeName,
+        monto: prizeAmountNum,
+        prizeId: data.prize_id || data.prize.id,
+        tipoPremio: 'vale_dismac',
+        fecha: formattedDate,
+        ticketId: data.code,
+        controlCode: data.control_code || controlCode || cleanCode,
+        estado: 'used',
+      };
+
+      // 4. Sincronizar el estado consultando de nuevo checkCode para obtener el siguiente last_form y contadores
+      let updatedCodeData: VerificarCodigoResult | undefined = undefined;
+      let intentosRestantes = Math.max(0, (intentosDisponiblesActuales ?? 1) - 1);
+
+      try {
+        const fresh = await this.girar.verificarCodigo(lookupCode);
+        if (fresh.success && fresh.data) {
+          updatedCodeData = fresh.data;
+          intentosRestantes = fresh.data.intentosDisponibles;
+        }
+      } catch {
+        // En caso de fallo de red al re-consultar, mantener el decremento manual
+      }
+
+      return {
+        process: true,
+        success: true,
+        statusCode: 200,
+        message: markRes.message || 'Formulario marcado como utilizado con éxito.',
+        data: {
+          premio: premioCanjeado,
+          rawMarkData: data,
+          intentosRestantes,
+          updatedCodeData,
+        },
+      };
     },
   };
 
@@ -490,134 +520,7 @@ class HttpService {
     },
   };
 
-  // ================= SIMULACIÓN LOCAL PARA FALLBACK OFFLINE =================
 
-  private getStorageKey(code: string) {
-    return `whirlpool_spin_${code}`;
-  }
-
-  private simularVerificarCodigo(code: string): ApiResponse<VerificarCodigoResult> {
-    const isDismac = code.startsWith('DM') || /^[A-Z0-9]{2}-[A-Z0-9]{2}-[A-Z0-9]{2}/i.test(code) || /^\d+[A-Z]+/i.test(code) || code.toLowerCase().includes('asd');
-    const isOtro = code.startsWith('WP') || /^WP-\d+/i.test(code);
-
-    if (!isDismac && !isOtro && code.length < 5) {
-      return {
-        process: false,
-        success: false,
-        message: 'El código ingresado no existe.',
-        errors: ['No se encontró ningún formulario asociado al código proporcionado.'],
-        statusCode: 404,
-      };
-    }
-
-    const cached = sessionStorage.getItem(this.getStorageKey(code));
-    if (cached) {
-      try {
-        const data = JSON.parse(cached) as VerificarCodigoResult;
-        return { process: true, success: true, data };
-      } catch {
-        // Fall through
-      }
-    }
-
-    const initialAttempts = isDismac ? 2 : 1;
-    const tipo = isDismac ? 'dismac' : 'otro_distribuidor';
-
-    const prizeOptions = [
-      { premio: 'Bs. 3.000', monto: 3000, isJackpot: true },
-      { premio: 'Bs. 2.000', monto: 2000, isJackpot: false },
-      { premio: 'Bs. 1.000', monto: 1000, isJackpot: false },
-      { premio: 'Bs. 500', monto: 500, isJackpot: false },
-      { premio: 'Bs. 250', monto: 250, isJackpot: false },
-    ];
-    const hash = code.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    const selectedPrize = prizeOptions[hash % prizeOptions.length];
-
-    const result: VerificarCodigoResult = {
-      codigo: code,
-      tipo,
-      valido: true,
-      lastFormId: `uuid-${Date.now()}`,
-      controlCode: isDismac ? code : undefined,
-      nombreCliente: isDismac ? 'Cliente Oficial Dismac' : 'Cliente Mercado Autorizado',
-      tienda: isDismac ? 'Dismac Tienda Central' : 'Distribuidor Autorizado',
-      intentosDisponibles: initialAttempts,
-      proximoPremio: {
-        intentoNumero: 1,
-        premio: selectedPrize.premio,
-        monto: selectedPrize.monto,
-        isJackpot: selectedPrize.isJackpot,
-        tipoPremio: 'vale_dismac',
-      },
-      premiosCanjeados: [],
-    };
-
-    sessionStorage.setItem(this.getStorageKey(code), JSON.stringify(result));
-    return { process: true, success: true, data: result };
-  }
-
-  private simularCompletarGiro(
-    code: string,
-    intentoNumero: number
-  ): ApiResponse<{ success: boolean; premio: PremioCanjeado; intentosRestantes: number; updatedCodeData?: VerificarCodigoResult }> {
-    const raw = sessionStorage.getItem(this.getStorageKey(code));
-    if (!raw) {
-      return { process: false, success: false, message: 'Registro de código no encontrado' };
-    }
-
-    try {
-      const data = JSON.parse(raw) as VerificarCodigoResult;
-      const premioCurrent = data.proximoPremio;
-      if (!premioCurrent) {
-        return { process: false, success: false, message: 'No quedan intentos disponibles para este código' };
-      }
-
-      const now = new Date();
-      const formattedDate = `${now.toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' })} ${now.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })}`;
-
-      const premioCanjeado: PremioCanjeado = {
-        id: `ticket-${Date.now()}`,
-        intentoNumero,
-        premio: premioCurrent.premio,
-        monto: premioCurrent.monto,
-        tipoPremio: premioCurrent.tipoPremio,
-        fecha: formattedDate,
-        ticketId: `TK-${Math.floor(100000 + Math.random() * 900000)}`,
-        controlCode: code,
-        estado: 'used',
-      };
-
-      data.premiosCanjeados.unshift(premioCanjeado);
-      data.intentosDisponibles = Math.max(0, data.intentosDisponibles - 1);
-
-      if (data.intentosDisponibles > 0) {
-        data.proximoPremio = {
-          intentoNumero: intentoNumero + 1,
-          premio: 'Bs. 500',
-          monto: 500,
-          isJackpot: false,
-          tipoPremio: 'vale_dismac',
-        };
-      } else {
-        data.proximoPremio = null;
-      }
-
-      sessionStorage.setItem(this.getStorageKey(code), JSON.stringify(data));
-
-      return {
-        process: true,
-        success: true,
-        data: {
-          success: true,
-          premio: premioCanjeado,
-          intentosRestantes: data.intentosDisponibles,
-          updatedCodeData: data,
-        },
-      };
-    } catch {
-      return { process: false, success: false, message: 'Error al procesar el intento' };
-    }
-  }
 
   // ================= RESPONSE / ERROR HANDLERS =================
 

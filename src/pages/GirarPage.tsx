@@ -6,29 +6,29 @@ import {
   RotateCw,
   Gift,
   CheckCircle2,
-  AlertCircle,
   AlertTriangle,
   Volume2,
   VolumeX,
   Clock,
   Award,
   X,
-  Sparkles,
 } from 'lucide-react';
-import { httpService, VerificarCodigoResult, ProximoPremio } from '../services/httpService';
+import { httpService, VerificarCodigoResult, PremioCanjeado } from '../services/httpService';
 import {
   playClickSound,
   setSoundMuted,
   getSoundMuted,
-  startSpinSound,
-  playDoorOpenSound,
   playCapsuleEjectSound,
+  playWaterSplashSound,
   playWinSound,
 } from '../utils/sound';
 import confetti from 'canvas-confetti';
 import { LegalBar } from '../components/sections/LegalBar';
 import { Footer } from '../components/sections/Footer';
 import { WhirlpoolHeroWasher } from '../components/machine/WhirlpoolHeroWasher';
+import { WaterPuddleUnderPodium } from '../components/machine/WaterPuddleUnderPodium';
+import { CrispPrizeBall } from '../components/machine/CrispPrizeBall';
+import WhirlpoolDigitalControlScreen from '../components/machine/WhirlpoolDigitalControlScreen';
 
 export type GirarPhase = 'idle' | 'spinning' | 'opening' | 'awarding' | 'revealed';
 
@@ -44,7 +44,8 @@ import coin250 from '../assets/250Bs.png';
 import coin100 from '../assets/100Bs.png';
 
 // Helper map to pick coin image according to amount
-const getCoinImage = (amt: number | string) => {
+const getCoinImage = (amt?: number | string) => {
+  if (!amt) return undefined;
   const str = String(amt);
   if (str.includes('3000') || str.includes('3.000')) return coin3000;
   if (str.includes('2000') || str.includes('2.000')) return coin2000;
@@ -74,8 +75,12 @@ export const GirarPage: React.FC = () => {
 
   // Finite state machine: idle -> spinning -> opening -> awarding -> revealed
   const [machinePhase, setMachinePhase] = useState<GirarPhase>('idle');
-  const [currentPrize, setCurrentPrize] = useState<ProximoPremio | null>(null);
-  const [readoutText, setReadoutText] = useState('Listo para girar');
+  const [currentPrize, setCurrentPrize] = useState<PremioCanjeado | null>(null);
+  const [waterDrainPhase, setWaterDrainPhase] = useState<'none' | 'flushing' | 'draining' | 'drained'>('none');
+
+  // Cinematic Aerial Camera Tilt: Triggers smoothly when door finishes opening and prize emerges
+  const isDoorOpenTest = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('testDoor') === 'open';
+  const isAerial = isDoorOpenTest || machinePhase === 'awarding' || machinePhase === 'revealed';
 
   const toggleMute = () => {
     const next = !muted;
@@ -117,7 +122,7 @@ export const GirarPage: React.FC = () => {
   };
 
   // Spin sequence orchestrator on the real Whirlpool washer
-  const handleStartSpin = () => {
+  const handleStartSpin = async () => {
     // Prevent double clicking / multiple triggers
     if (machinePhase !== 'idle' || isChecking) return;
 
@@ -133,111 +138,133 @@ export const GirarPage: React.FC = () => {
       return;
     }
 
-    const predeterminedPrize = activeCodeData.proximoPremio;
-    if (!predeterminedPrize) {
-      setErrorMessage('No hay más intentos disponibles para este código.');
+    if (!activeCodeData.lastFormId) {
+      setErrorMessage('No se encontró el identificador del formulario para este intento. Por favor consulta tu código nuevamente.');
       return;
     }
 
     playClickSound();
-    setCurrentPrize(predeterminedPrize);
     setErrorMessage('');
+    setCurrentPrize(null);
 
-    // Disparar sincronización con la API inmediatamente al iniciar el giro para que complete durante la animación
-    handleSpinFinished(predeterminedPrize);
-
-    // Audio FX
-    const stopSpinAudio = startSpinSound();
-
-    // 1. Spinning Phase: Centrifugado turbo en el tambor (agua y esferas girando)
+    // 1. INICIAR EL CENTRIFUGADO DE FORMA INMEDIATA (0ms de retraso, tambor gira al instante)
     setMachinePhase('spinning');
-    setReadoutText('Centrifugando…');
-
-    // Scroll smoothly to washer
+    setWaterDrainPhase('none');
     document.getElementById('washer-stage')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-    // 2. Cycle completes after 2600ms
-    setTimeout(() => {
-      stopSpinAudio();
-      setReadoutText('Ciclo completo');
-    }, 2600);
+    // 2. Ejecutar la petición al backend en paralelo mientras el tambor ya está girando a alta velocidad
+    const intentoNumero = (activeCodeData.premiosCanjeados?.length || 0) + 1;
+    const spinPromise = httpService.girar.completarGiro(
+      activeCodeData.codigo,
+      intentoNumero,
+      activeCodeData.lastFormId,
+      activeCodeData.controlCode,
+      activeCodeData.intentosDisponibles
+    );
 
-    // 3. Door opens (tapa se abre con perspectiva 3D) at 3000ms
-    setTimeout(() => {
-      playDoorOpenSound();
-      setMachinePhase('opening');
-      setReadoutText('Abriendo compuerta…');
-    }, 3000);
+    // Garantizar al menos 2400ms de centrifugado para una experiencia fluida y realista
+    const spinDelayPromise = new Promise((resolve) => setTimeout(resolve, 2400));
 
-    // 4. Water cascade & prize emerges at 4000ms
+    let spinResult;
+    try {
+      const [res] = await Promise.all([spinPromise, spinDelayPromise]);
+      spinResult = res;
+    } catch (err: any) {
+      spinResult = {
+        process: false,
+        success: false,
+        statusCode: 500,
+        message: err?.message || 'Error de conexión al procesar el giro.',
+        errors: [err?.message || 'Error de conexión.'],
+      };
+    }
+
+    // 3. Evaluar respuesta del backend:
+    // Si falla o no devuelve premio: detener el giro de inmediato, volver a 'idle' y mostrar el error real
+    if (!spinResult || !spinResult.success || !spinResult.data || !spinResult.data.premio) {
+      setMachinePhase('idle');
+      setWaterDrainPhase('none');
+      setCurrentPrize(null);
+
+      const backendMsg =
+        spinResult?.message ||
+        (spinResult?.errors && spinResult.errors.length > 0 ? spinResult.errors[0] : 'No se pudo completar el giro.');
+      setErrorMessage(backendMsg);
+
+      if (backendMsg.toLowerCase().includes('utilizado') || backendMsg.toLowerCase().includes('used')) {
+        try {
+          const fresh = await httpService.girar.verificarCodigo(activeCodeData.controlCode || activeCodeData.codigo);
+          if (fresh.success && fresh.data) {
+            setActiveCodeData(fresh.data);
+          }
+        } catch {
+          // ignore
+        }
+      }
+      return;
+    }
+
+    // 4. Si el backend respondió exitosamente con el premio asignado:
+    const spinData = spinResult.data;
+    const wonPrize = spinData.premio;
+    setCurrentPrize(wonPrize);
+
+    // Actualizar activeCodeData con la información sincronizada del backend
+    if (spinData.updatedCodeData) {
+      setActiveCodeData(spinData.updatedCodeData);
+    } else {
+      setActiveCodeData((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          intentosDisponibles: spinData.intentosRestantes,
+          premiosCanjeados: [wonPrize, ...(prev.premiosCanjeados || [])],
+        };
+      });
+    }
+
+    // 5. Continuar la secuencia de apertura y desparrame de agua:
+    // Fase 1: Se detiene el centrifugado, se abre la tapa lentamente y brota el agua hacia el podio
+    setMachinePhase('opening');
+    setWaterDrainPhase('flushing');
+    playWaterSplashSound();
+
+    // Fase 2: A los 1500ms: Con la puerta abriéndose de forma suave y realista, cambio de cámara hacia el charco y premio sobre el agua
     setTimeout(() => {
+      setMachinePhase('awarding');
       playCapsuleEjectSound();
-      playWinSound(predeterminedPrize.isJackpot);
+    }, 1500);
+
+    // Fase 3: A los 2500ms: El tambor terminó de vaciarse por completo, el torrente cesa y el premio queda asentado en el charco
+    setTimeout(() => {
+      setWaterDrainPhase('draining');
+    }, 2500);
+
+    // Fase 4: A los 3300ms: Concluido, sonido de victoria y confeti
+    setTimeout(() => {
+      setWaterDrainPhase('drained');
+      setMachinePhase('revealed');
+
+      const isJackpot = wonPrize.premio.includes('3000') || wonPrize.premio.includes('3.000');
+      playWinSound(isJackpot);
 
       confetti({
-        particleCount: predeterminedPrize.isJackpot ? 200 : 130,
-        spread: 80,
-        origin: { y: 0.55 },
+        particleCount: isJackpot ? 220 : 140,
+        spread: 85,
+        origin: { y: 0.65 },
         colors: ['#FDC32B', '#FFD95E', '#1C3B8B', '#D7263D', '#FFFFFF'],
       });
 
-      setMachinePhase('awarding');
-      setReadoutText(`¡Ganaste ${predeterminedPrize.premio}!`);
-    }, 4000);
-
-    // 5. Revealed banner state at 5200ms
-    setTimeout(() => {
-      setMachinePhase('revealed');
-      document.getElementById('prize-banner')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 5200);
-  };
-
-  // Called to persist the result in the API
-  const handleSpinFinished = async (prizeToRecord = currentPrize) => {
-    if (!activeCodeData || !prizeToRecord) return;
-
-    // Actualización optimista inmediata para eliminar parpadeo y que nunca muestre el número previo
-    const currentAttempts = activeCodeData.intentosDisponibles;
-    const remainingOptimistic = Math.max(0, currentAttempts - 1);
-    setActiveCodeData((prev) => (prev ? { ...prev, intentosDisponibles: remainingOptimistic } : null));
-
-    try {
-      const updateRes = await httpService.girar.completarGiro(
-        activeCodeData.controlCode || activeCodeData.codigo,
-        prizeToRecord.intentoNumero,
-        activeCodeData.lastFormId,
-        activeCodeData.controlCode,
-        currentAttempts
-      );
-
-      if (updateRes.success && updateRes.data) {
-        const resData = updateRes.data;
-        if (resData.updatedCodeData) {
-          // Re-sincronización en vivo con el backend (actualiza nuevo last_form, intentos y premios)
-          setActiveCodeData(resData.updatedCodeData);
-        } else {
-          // Fallback manual si no hubo sincronización
-          setActiveCodeData((prev) => {
-            if (!prev) return null;
-            const updatedCanjeados = [resData.premio, ...prev.premiosCanjeados];
-            return {
-              ...prev,
-              intentosDisponibles: resData.intentosRestantes,
-              proximoPremio: resData.intentosRestantes > 0 ? prev.proximoPremio : null,
-              premiosCanjeados: updatedCanjeados,
-            };
-          });
-        }
-      }
-    } catch (err) {
-      console.error('Error al actualizar estado en la API:', err);
-    }
+      setTimeout(() => {
+        document.getElementById('prize-banner')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 700);
+    }, 3300);
   };
 
   const handleResetForNextAttempt = () => {
     playClickSound();
     setMachinePhase('idle');
-    setReadoutText('Listo para girar');
+    setWaterDrainPhase('none');
     setCurrentPrize(null);
   };
 
@@ -248,7 +275,7 @@ export const GirarPage: React.FC = () => {
     setErrorMessage('');
     setCurrentPrize(null);
     setMachinePhase('idle');
-    setReadoutText('Listo para girar');
+    setWaterDrainPhase('none');
     setIsModalOpen(true);
   };
 
@@ -286,7 +313,7 @@ export const GirarPage: React.FC = () => {
       </button>
 
       {/* ================= HERO SECTION (FULL WIDTH WASHING MACHINE STAGE) ================= */}
-      <main className="relative flex-1 hero-radial-bg overflow-hidden pt-3 sm:pt-5 pb-12 px-3 sm:px-6">
+      <main className="relative flex-1 hero-radial-bg overflow-hidden pt-2 sm:pt-4 pb-12 px-1 sm:px-3 lg:landscape:px-6">
         {/* Sunburst background rays */}
         <div className="absolute inset-0 pointer-events-none opacity-30 z-0">
           {rays.map((_, i) => (
@@ -307,9 +334,9 @@ export const GirarPage: React.FC = () => {
           style={{ backgroundImage: `url(${texturaFondoImg})` }}
         />
 
-        <div className="relative z-10 max-w-[1180px] mx-auto flex flex-col items-center">
+        <div className="relative z-10 w-full max-w-full lg:landscape:max-w-[1180px] mx-auto flex flex-col items-center">
           {/* Title Banner */}
-          <div className="mb-2 text-center">
+          <div className="mb-2 text-center px-3">
             <img
               src={tituloImg}
               alt="Whirlpool Special Days"
@@ -317,73 +344,128 @@ export const GirarPage: React.FC = () => {
             />
           </div>
 
-          {/* ================= HERO WASHING MACHINE STAGE (IDENTICAL TO /, HERO SCALE) ================= */}
+          {/* ================= HERO WASHING MACHINE STAGE (FULL WIDTH EN MÓVILES, TABLETS Y TÓTEMS) ================= */}
           <div
             id="washer-stage"
-            className="w-full relative mx-auto my-1 sm:my-3 flex flex-col items-center justify-center overflow-visible select-none"
+            className="w-full relative mx-auto my-1 sm:my-2 flex flex-col items-center justify-center overflow-visible select-none"
           >
             <div
-              className="relative transition-transform duration-1000 ease-out flex flex-col items-center justify-center overflow-visible"
+              className="relative flex flex-col items-center justify-center overflow-visible transition-all washer-stage-container"
               style={{
-                width: 'min(98vw, calc(86vh * 563 / 794), 840px)',
-                maxWidth: '100%',
+                transformOrigin: '50% 88%',
+                transform: isAerial
+                  ? 'translateY(-5%) scale(1.15)'
+                  : 'translateY(0%) scale(1)',
+                transition: 'transform 1.2s cubic-bezier(0.22, 1, 0.36, 1)',
               }}
             >
-              {/* Podium Base Platform beneath washer (same official podium from /) */}
-              <div className="absolute left-1/2 -translate-x-1/2 -bottom-[3.5%] w-[130%] aspect-[1892/207] z-0 pointer-events-none">
+              {/* 1. Background Spreading Water Puddle (beneath and around podium support, z-8) */}
+              <WaterPuddleUnderPodium
+                phase={isDoorOpenTest ? 'draining' : waterDrainPhase}
+                isAerial={isAerial}
+                layer="back"
+              />
+
+              {/* Podium Base Platform beneath washer (same official podium from /, z-10) */}
+              <div className="absolute left-1/2 -translate-x-1/2 -bottom-[3.5%] w-[130%] aspect-[1892/207] z-10 pointer-events-none">
                 <div className="absolute inset-x-6 -bottom-3 h-8 bg-black/70 blur-xl rounded-[50%]" />
                 <img src={podioImg} alt="Podio Oficial" className="w-full h-full object-contain drop-shadow-2xl" />
               </div>
 
-              {/* The Real Whirlpool Washing Machine from / */}
+              {/* 2. Foreground Water Spill & Liquid Support Pedestal (in front of podium, cradling the prize ball, z-22) */}
+              <WaterPuddleUnderPodium
+                phase={isDoorOpenTest ? 'draining' : waterDrainPhase}
+                isAerial={isAerial}
+                layer="front"
+              />
+
+              {/* The Real Whirlpool Washing Machine with 3D Drum */}
               <div className="relative w-full aspect-[563/794] z-20">
                 <WhirlpoolHeroWasher
                   isSpinning={machinePhase === 'spinning'}
-                  isDoorOpen={machinePhase === 'opening' || machinePhase === 'awarding' || machinePhase === 'revealed'}
-                  isCapOut={machinePhase === 'awarding' || machinePhase === 'revealed'}
+                  isDoorOpen={isDoorOpenTest || machinePhase === 'opening' || machinePhase === 'awarding' || machinePhase === 'revealed'}
+                  isCapOut={isDoorOpenTest || machinePhase === 'awarding' || machinePhase === 'revealed'}
                   drumState={
-                    machinePhase === 'spinning'
-                      ? 'washing'
-                      : machinePhase === 'opening'
-                        ? 'opening'
-                        : machinePhase === 'awarding' || machinePhase === 'revealed'
-                          ? 'awarding'
-                          : 'idle'
+                    isDoorOpenTest
+                      ? 'awarding'
+                      : machinePhase === 'spinning'
+                        ? 'washing'
+                        : machinePhase === 'opening'
+                          ? 'opening'
+                          : machinePhase === 'awarding' || machinePhase === 'revealed'
+                            ? 'awarding'
+                            : 'idle'
                   }
-                  winningCoinImg={getCoinImage(currentPrize?.premio || '3000')}
+                  winningCoinImg={isDoorOpenTest ? coin3000 : (currentPrize ? getCoinImage(currentPrize.premio) : undefined)}
+                  prizeAmount={isDoorOpenTest ? 'Bs. 3.000' : currentPrize?.premio}
+                  waterDrainPhase={isDoorOpenTest ? 'draining' : waterDrainPhase}
+                  onControlScreenClick={() => {
+                    playClickSound();
+                    setIsModalOpen(true);
+                  }}
+                  hasActiveCode={!!activeCodeData}
+                  isIdle={!isDoorOpenTest && machinePhase === 'idle'}
                   showTopCoin={false}
                 />
               </div>
             </div>
           </div>
 
+          {/* ================= ERROR / WARNING CALLOUT ================= */}
+          {errorMessage && machinePhase === 'idle' && (
+            <div className="mt-3 mb-2 w-full max-w-lg mx-auto p-4 rounded-2xl bg-amber-50 border-2 border-amber-400 text-amber-900 shadow-md flex items-start gap-3 text-sm font-semibold text-left animate-shake relative z-30">
+              <AlertTriangle className="w-5 h-5 flex-none text-amber-600 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-extrabold text-amber-950 uppercase text-xs tracking-wider">Aviso:</p>
+                <p className="text-amber-900 text-xs sm:text-sm mt-0.5 leading-snug">{errorMessage}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setErrorMessage('')}
+                className="text-amber-700 hover:text-amber-950 p-1 rounded-lg hover:bg-amber-100/60 transition-colors cursor-pointer"
+                aria-label="Cerrar advertencia"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {/* ================= ACTION CONTROLS BELOW WASHER ================= */}
           {activeCodeData && activeCodeData.intentosDisponibles > 0 && machinePhase === 'idle' && (
-            <div className="mt-3 sm:mt-5 mb-2 flex flex-wrap items-center justify-center gap-3 relative z-30">
-              <button
-                type="button"
-                onClick={handleStartSpin}
-                className="relative overflow-hidden bg-gradient-to-r from-[#FDC32B] via-[#FFE27A] to-[#FDC32B] hover:brightness-110 active:scale-95 text-[#101010] font-black text-base sm:text-xl uppercase tracking-wider px-8 sm:px-12 py-3.5 sm:py-4 rounded-2xl border-2 border-[#101010] shadow-[0_14px_36px_rgba(253,195,43,0.55)] transition-all cursor-pointer flex items-center gap-2.5 animate-bounce-subtle"
-              >
-                <span className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/60 to-transparent animate-btn-shimmer pointer-events-none" />
-                <RotateCw className="w-5 h-5 sm:w-6 sm:h-6 animate-spin-slow" />
-                <span>¡Girar Ahora!</span>
-                <span className="text-xs sm:text-sm font-mono bg-[#101010] text-[#FDC32B] px-2.5 py-0.5 rounded-full ml-1">
-                  {activeCodeData.intentosDisponibles} {activeCodeData.intentosDisponibles === 1 ? 'giro' : 'giros'}
-                </span>
-              </button>
+            <div className="mt-3 sm:mt-5 mb-2 flex flex-col items-center justify-center gap-3 relative z-30">
+              {/* Badge nítido del código activo (organizado prolijamente fuera de la imagen de la lavadora) */}
+              <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-[#11161F]/90 backdrop-blur-md border border-[#232F3E] text-xs font-mono shadow-md">
+                <span className="w-2 h-2 rounded-full bg-[#00E5FF] shadow-[0_0_8px_#00E5FF] animate-pulse" />
+                <span className="text-slate-400 font-sans text-[11px] font-semibold uppercase tracking-wider">Código ingresado:</span>
+                <span className="font-bold text-[#00E5FF] tracking-wider text-xs sm:text-sm">{activeCodeData.controlCode || activeCodeData.codigo}</span>
+              </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  playClickSound();
-                  setIsModalOpen(true);
-                }}
-                className="bg-white/95 hover:bg-white text-[#101010] font-bold text-xs sm:text-sm uppercase tracking-wider px-5 py-3.5 rounded-2xl border-2 border-[#101010]/20 hover:border-[#101010] shadow-md transition-all cursor-pointer flex items-center gap-1.5"
-              >
-                <Search className="w-4 h-4 text-[#6F6756]" />
-                <span>Cambiar código</span>
-              </button>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleStartSpin}
+                  className="relative overflow-hidden bg-gradient-to-r from-[#FDC32B] via-[#FFE27A] to-[#FDC32B] hover:brightness-110 active:scale-95 text-[#101010] font-black text-base sm:text-xl uppercase tracking-wider px-8 sm:px-12 py-3.5 sm:py-4 rounded-2xl border-2 border-[#101010] shadow-[0_14px_36px_rgba(253,195,43,0.55)] transition-all cursor-pointer flex items-center gap-2.5 animate-bounce-subtle"
+                >
+                  <span className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/60 to-transparent animate-btn-shimmer pointer-events-none" />
+                  <RotateCw className="w-5 h-5 sm:w-6 sm:h-6 animate-spin-slow" />
+                  <span>¡Girar Ahora!</span>
+                  <span className="text-xs sm:text-sm font-mono bg-[#101010] text-[#FDC32B] px-2.5 py-0.5 rounded-full ml-1">
+                    {activeCodeData.intentosDisponibles} {activeCodeData.intentosDisponibles === 1 ? 'giro' : 'giros'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    playClickSound();
+                    setIsModalOpen(true);
+                  }}
+                  className="bg-white/95 hover:bg-white text-[#101010] font-bold text-xs sm:text-sm uppercase tracking-wider px-5 py-3.5 rounded-2xl border-2 border-[#101010]/20 hover:border-[#101010] shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Search className="w-4 h-4 text-[#6F6756]" />
+                  <span>Cambiar código</span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -400,33 +482,6 @@ export const GirarPage: React.FC = () => {
             </div>
           )}
 
-          {!activeCodeData && machinePhase === 'idle' && (
-            <div className="mt-3 sm:mt-5 mb-2 flex items-center justify-center relative z-30">
-              <button
-                type="button"
-                onClick={() => {
-                  playClickSound();
-                  setIsModalOpen(true);
-                }}
-                className="relative overflow-hidden bg-[#101010] hover:bg-[#222222] active:scale-95 text-[#FDC32B] font-extrabold text-xs sm:text-sm uppercase tracking-wider px-6 sm:px-8 py-3 rounded-2xl border-2 border-[#FDC32B]/80 shadow-[0_8px_22px_rgba(0,0,0,0.25)] transition-all cursor-pointer flex items-center gap-2 group"
-              >
-                <Sparkles className="w-4 h-4 text-[#FDC32B] group-hover:rotate-12 transition-transform" />
-                <span>Ingresa tu código para girar</span>
-                <span className="text-[10px] font-mono font-bold bg-[#FDC32B] text-[#101010] px-2 py-0.5 rounded-full ml-1">
-                  Dismac / Mercados
-                </span>
-              </button>
-            </div>
-          )}
-
-          {machinePhase !== 'idle' && (
-            <div className="mt-3 sm:mt-5 mb-2 flex items-center justify-center relative z-30 animate-pulse">
-              <div className="bg-[#101010]/90 text-[#00E5FF] font-mono text-xs sm:text-sm font-bold uppercase tracking-wider px-5 py-2.5 rounded-xl border border-[#00E5FF]/40 shadow-[0_0_20px_rgba(0,229,255,0.3)] flex items-center gap-2.5">
-                <RotateCw className="w-4 h-4 animate-spin text-[#FDC32B]" />
-                <span>{readoutText}</span>
-              </div>
-            </div>
-          )}
 
           {/* ================= VICTORY BANNER & NEXT ACTION ================= */}
           {machinePhase === 'revealed' && currentPrize && (
@@ -500,10 +555,10 @@ export const GirarPage: React.FC = () => {
                     className="bg-white rounded-2xl p-5 border-2 border-[#101010] shadow-[0_6px_20px_rgba(42,36,24,0.08)] flex items-center gap-4 transition-transform hover:-translate-y-0.5"
                   >
                     <div className="w-16 h-16 flex-none rounded-xl bg-[#FFFBF0] border border-[#E6DDC6] p-1 flex items-center justify-center shadow-inner">
-                      <img
-                        src={getCoinImage(premio.premio)}
-                        alt={premio.premio}
-                        className="w-full h-full object-contain drop-shadow"
+                      <CrispPrizeBall
+                        amount={premio.premio}
+                        fallbackImg={getCoinImage(premio.premio)}
+                        className="w-full h-full"
                       />
                     </div>
 
@@ -532,132 +587,53 @@ export const GirarPage: React.FC = () => {
         </div>
       </main>
 
-      {/* ================= CODE VERIFICATION POPUP MODAL ================= */}
+      {/* ================= CODE VERIFICATION POPUP MODAL (PANTALLA DIGITAL DE LAVADORA WHIRLPOOL) ================= */}
       {isModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-md animate-fade-in select-none"
+          className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-5 bg-black/85 backdrop-blur-md animate-fade-in select-none overflow-y-auto"
           onClick={() => setIsModalOpen(false)}
         >
           <div
-            className="relative w-full max-w-[620px] bg-white rounded-3xl p-5 sm:p-8 border-2 border-[#101010] shadow-[0_24px_60px_rgba(0,0,0,0.5)] overflow-hidden"
+            className="relative w-full max-w-[720px] my-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Top gold accent line */}
-            <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-[#FDC32B] via-[#FFE27A] to-[#FDC32B]" />
+            <WhirlpoolDigitalControlScreen
+              codigoInput={codigoInput}
+              onChangeCodigo={(val) => {
+                setCodigoInput(val);
+                setErrorMessage('');
+              }}
+              onSubmit={handleConsultarCodigo}
+              isChecking={isChecking}
+              errorMessage={errorMessage}
+              onClose={() => setIsModalOpen(false)}
+            />
 
-            {/* Close button */}
-            <button
-              type="button"
-              onClick={() => setIsModalOpen(false)}
-              aria-label="Cerrar ventana"
-              className="absolute top-4 right-4 w-9 h-9 rounded-full bg-[#101010]/10 hover:bg-[#101010] hover:text-white flex items-center justify-center transition-all cursor-pointer text-[#101010]"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            {/* Modal Title */}
-            <div className="mb-4 text-left">
-              <label className="text-base sm:text-lg font-black tracking-wide text-[#101010] flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#FDC32B] inline-block shadow-sm" />
-                Ingresa tu código
-              </label>
-              <p className="text-xs text-[#6F6756] mt-0.5">
-                Valida tu compra para activar tus giros en la lavadora
-              </p>
-            </div>
-
-            {/* Warning Callout */}
-            <div className="mb-4 bg-[#FFF9EA] border border-[#FDC32B] rounded-2xl p-3 sm:p-3.5 flex items-start gap-2.5 text-xs sm:text-[13px] text-[#554C3A] text-left leading-relaxed shadow-xs">
-              <AlertTriangle className="w-4 h-4 text-[#D97706] flex-none mt-0.5" />
-              <div>
-                <span className="font-extrabold text-[#9A6200]">Importante:</span> Si compraste en <strong>Dismac</strong>, ingresa el <strong>código de control</strong> de tu factura. Si compraste en el <strong>mercado informal</strong>, ingresa tu <strong>código único</strong>.
-              </div>
-            </div>
-
-            {/* Form */}
-            <form onSubmit={handleConsultarCodigo} className="space-y-4">
-              <div className="flex flex-col sm:flex-row gap-2.5">
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    value={codigoInput}
-                    onChange={(e) => {
-                      setCodigoInput(e.target.value);
-                      setErrorMessage('');
-                    }}
-                    placeholder=""
-                    disabled={isChecking || machinePhase !== 'idle'}
-                    autoFocus
-                    className="w-full bg-[#FFFDF7] border-2 border-[#101010]/20 focus:border-[#101010] focus:ring-4 focus:ring-[#FDC32B]/30 rounded-2xl px-4 py-3.5 sm:py-4 text-[#101010] font-mono text-base sm:text-lg font-bold tracking-wider outline-none transition-all placeholder:text-[#A89F8D] placeholder:tracking-normal placeholder:font-sans placeholder:text-sm shadow-inner"
-                  />
-                  {activeCodeData && (
-                    <CheckCircle2 className="w-6 h-6 text-emerald-600 absolute right-3.5 top-1/2 -translate-y-1/2" />
-                  )}
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isChecking || machinePhase !== 'idle'}
-                  className="bg-[#101010] hover:bg-[#222222] active:scale-95 disabled:opacity-60 text-[#FDC32B] hover:text-white font-extrabold text-sm uppercase tracking-wider px-6 sm:px-8 py-3.5 sm:py-4 rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer border border-[#101010]"
-                >
-                  <Search className="w-4 h-4" />
-                  <span>{isChecking ? 'Verificando…' : 'Consultar'}</span>
-                </button>
-              </div>
-
-              {/* Error Alert inside modal */}
-              {errorMessage && (
-                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center gap-2 text-left animate-shake">
-                  <AlertCircle className="w-4 h-4 flex-none text-red-600" />
-                  <span>{errorMessage}</span>
-                </div>
-              )}
-
-              {/* Quick Test Shortcuts 
-              <div className="pt-2 border-t border-[#E6DDC6]/60 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#6F6756]">
-                <span className="font-semibold">Pruebas rápidas:</span>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={handleFillDemoDismac}
-                    className="px-2.5 py-1 rounded-lg bg-[#FFFBF0] hover:bg-[#FDC32B] border border-[#E6DDC6] text-[#101010] font-bold transition-colors cursor-pointer"
-                  >
-                    Demo Dismac (2 giros)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleFillDemoMercado}
-                    className="px-2.5 py-1 rounded-lg bg-[#FFFBF0] hover:bg-[#FDC32B] border border-[#E6DDC6] text-[#101010] font-bold transition-colors cursor-pointer"
-                  >
-                    Demo Mercado (1 giro)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleFillDemoInvalido}
-                    className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 font-bold transition-colors cursor-pointer"
-                  >
-                    Código Inválido
-                  </button>
+            {/* Aviso informativo complementario */}
+            {!activeCodeData && (
+              <div className="mt-3 bg-[#1F2418]/90 border border-[#FDC32B]/50 rounded-xl p-3 flex items-start gap-2.5 text-xs text-[#E5D7A3] text-left leading-relaxed shadow-lg backdrop-blur-sm">
+                <AlertTriangle className="w-4 h-4 text-[#FDC32B] flex-none mt-0.5" />
+                <div>
+                  <span className="font-extrabold text-[#FDC32B]">Importante:</span> Si compraste en <strong>Dismac</strong>, ingresa el <strong>código de control</strong> de tu factura. Si compraste en el <strong>mercado informal</strong>, ingresa tu <strong>código único</strong>.
                 </div>
               </div>
-              */}
-            </form>
+            )}
 
-            {/* If code verified: show status & action inside modal */}
+            {/* Si el código está validado, mostrar su estado y botón de girar */}
             {activeCodeData && (
-              <div className="mt-5 pt-4 border-t-2 border-[#101010]/10 text-left">
+              <div className="mt-3 bg-[#14181F] rounded-2xl border-2 border-[#384252] p-4 text-left shadow-2xl">
                 {activeCodeData.intentosDisponibles > 0 ? (
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#1A1F29] p-3.5 rounded-xl border border-[#2B3544]">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm sm:text-base font-black text-[#101010]">
+                        <span className="font-mono text-base font-black text-[#00E5FF] tracking-wider">
                           {activeCodeData.controlCode || activeCodeData.codigo}
                         </span>
-                        <span className="text-[10.5px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          Válido
+                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/50">
+                          Código Válido
                         </span>
                       </div>
-                      <p className="text-xs text-[#6F6756] mt-0.5">
+                      <p className="text-xs text-[#9AA5B5] mt-0.5">
                         {activeCodeData.tipo === 'dismac'
                           ? 'Compra en tienda Dismac'
                           : 'Compra en distribuidor de mercado'}
@@ -665,7 +641,7 @@ export const GirarPage: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-2.5">
-                      <span className="font-display text-sm font-bold bg-[#FFD95E] text-[#101010] px-3.5 py-1.5 rounded-xl border border-[#101010] shadow-sm">
+                      <span className="font-mono text-xs font-bold bg-[#0A0D11] text-[#FDC32B] border border-[#FDC32B]/40 px-3 py-1.5 rounded-lg shadow-inner">
                         {`${activeCodeData.intentosDisponibles} ${activeCodeData.intentosDisponibles === 1 ? 'giro disponible' : 'giros disponibles'}`}
                       </span>
 
@@ -676,35 +652,33 @@ export const GirarPage: React.FC = () => {
                             setIsModalOpen(false);
                             handleStartSpin();
                           }}
-                          className="relative overflow-hidden bg-gradient-to-r from-[#FDC32B] via-[#FFE27A] to-[#FDC32B] hover:brightness-105 active:scale-95 text-[#101010] font-black text-sm uppercase tracking-wider px-5 py-2.5 rounded-xl border-2 border-[#101010] shadow-md transition-all cursor-pointer"
+                          className="relative overflow-hidden bg-gradient-to-r from-[#FDC32B] via-[#FFE27A] to-[#FDC32B] hover:brightness-110 active:scale-95 text-[#101010] font-black text-xs uppercase tracking-wider px-4 py-2.5 rounded-lg border border-[#FDC32B] shadow-md transition-all cursor-pointer flex items-center gap-1.5"
                         >
-                          <span className="relative z-10 flex items-center gap-1.5">
-                            <RotateCw className="w-4 h-4" />
-                            ¡Girar Ahora!
-                          </span>
+                          <RotateCw className="w-3.5 h-3.5" />
+                          <span>¡Girar Ahora!</span>
                         </button>
                       )}
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    <div className="bg-[#FFF9EA] border border-[#FDC32B] rounded-2xl p-3 sm:p-3.5 flex items-start justify-between gap-3">
+                  <div className="space-y-3 bg-[#1A1F29] p-3.5 rounded-xl border border-[#2B3544]">
+                    <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-none" />
-                          <span className="font-mono text-sm font-black text-[#101010]">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-none" />
+                          <span className="font-mono text-sm font-black text-[#00E5FF]">
                             {activeCodeData.controlCode || activeCodeData.codigo}
                           </span>
-                          <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/50">
                             Válido
                           </span>
                         </div>
-                        <p className="text-xs font-semibold text-[#8C6D15] mt-1">
+                        <p className="text-xs font-semibold text-[#FDC32B] mt-1">
                           Ya utilizaste todos los giros de este código
                         </p>
                       </div>
 
-                      <span className="text-[11px] font-bold bg-[#101010] text-[#FDC32B] px-3 py-1.5 rounded-xl flex-none">
+                      <span className="text-[11px] font-mono font-bold bg-[#0A0D11] text-[#FDC32B] border border-[#FDC32B]/40 px-3 py-1.5 rounded-lg flex-none">
                         0 giros restantes
                       </span>
                     </div>
@@ -712,15 +686,15 @@ export const GirarPage: React.FC = () => {
                     {/* Lista compacta de premios ganados con este código */}
                     {activeCodeData.premiosCanjeados && activeCodeData.premiosCanjeados.length > 0 && (
                       <div>
-                        <div className="text-[11px] font-bold uppercase tracking-wider text-[#6F6756] mb-2 flex items-center gap-1.5">
-                          <Award className="w-3.5 h-3.5 text-[#101010]" />
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-2 flex items-center gap-1.5">
+                          <Award className="w-3.5 h-3.5 text-[#FDC32B]" />
                           <span>Premios ganados con este código:</span>
                         </div>
                         <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                           {activeCodeData.premiosCanjeados.map((premio) => (
                             <div
                               key={premio.id}
-                              className="bg-[#FFFBF0] border border-[#E6DDC6] rounded-xl p-2 sm:p-2.5 flex items-center justify-between gap-3 shadow-2xs"
+                              className="bg-[#0D1014] border border-[#2B313A] rounded-xl p-2 sm:p-2.5 flex items-center justify-between gap-3"
                             >
                               <div className="flex items-center gap-2.5 min-w-0">
                                 <img
@@ -729,16 +703,16 @@ export const GirarPage: React.FC = () => {
                                   className="w-7 h-7 sm:w-8 sm:h-8 object-contain flex-none drop-shadow"
                                 />
                                 <div className="truncate">
-                                  <div className="font-display font-black text-xs sm:text-sm text-[#101010] truncate">
+                                  <div className="font-display font-black text-xs sm:text-sm text-white truncate">
                                     {premio.premio}
                                   </div>
-                                  <div className="text-[10px] text-[#8E887A] flex items-center gap-1">
+                                  <div className="text-[10px] text-slate-400 flex items-center gap-1">
                                     <Clock className="w-2.5 h-2.5" />
                                     {premio.fecha}
                                   </div>
                                 </div>
                               </div>
-                              <span className="text-[9.5px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex-none">
+                              <span className="text-[9.5px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/50 flex-none">
                                 Canjeado
                               </span>
                             </div>
@@ -747,20 +721,20 @@ export const GirarPage: React.FC = () => {
                       </div>
                     )}
 
-                    <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-2 border-t border-[#101010]/10">
+                    <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-2 border-t border-[#2B313A]">
                       <button
                         type="button"
                         onClick={handleResetModalCodigo}
-                        className="w-full sm:w-auto bg-[#101010] hover:bg-[#252525] active:scale-95 text-[#FDC32B] font-extrabold text-xs uppercase tracking-wider px-5 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer flex items-center justify-center gap-2"
+                        className="w-full sm:w-auto bg-[#2A303A] hover:bg-[#3D4554] active:scale-95 text-[#FDC32B] font-extrabold text-xs uppercase tracking-wider px-4 py-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
                       >
-                        <RotateCw className="w-3.5 h-3.5" />
+                        <RotateCw className="w-3 h-3" />
                         <span>Introducir otro código</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => setIsModalOpen(false)}
-                        className="w-full sm:w-auto bg-white hover:bg-zinc-100 border border-[#101010]/20 text-[#101010] font-bold text-xs uppercase px-4 py-2.5 rounded-xl cursor-pointer"
+                        className="w-full sm:w-auto bg-[#1C2026] hover:bg-[#252A33] border border-[#3A4350] text-slate-300 font-bold text-xs uppercase px-4 py-2 rounded-lg cursor-pointer"
                       >
                         Cerrar
                       </button>

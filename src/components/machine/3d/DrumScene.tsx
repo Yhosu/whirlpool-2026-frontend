@@ -10,7 +10,6 @@ import {
 } from './textures';
 import {
   createFrontWaterVolumeMaterial,
-  createGlassDoorMaterial,
 } from './waterShader';
 
 export interface CycleInfo {
@@ -147,7 +146,6 @@ export const DrumScene: React.FC<DrumSceneProps> = ({
 
   // Custom Shaders (Pure sapphire blue, pure white suds, zero green)
   const frontWaterMaterial = useMemo(() => createFrontWaterVolumeMaterial(), []);
-  const glassMaterial = useMemo(() => createGlassDoorMaterial(textures.droplets), [textures.droplets]);
 
   // Autonomous Cycle State
   const cycleIndex = useRef(0);
@@ -353,20 +351,32 @@ export const DrumScene: React.FC<DrumSceneProps> = ({
       targetSpeed * speedMultiplier,
       dt * 1.8
     );
+    const isDraining = machineState === 'opening' || machineState === 'awarding';
+    const targetWater = isDraining
+      ? -3.2 // Complete drainage down and out of the drum (desagüe total)
+      : machineState === 'washing'
+        ? -0.32
+        : activeCycle.waterLevel;
+    const targetFoam = isDraining
+      ? 0.0
+      : surgeBoostTimer.current > 0
+        ? currentFoamDensity.current
+        : activeCycle.foamDensity;
+
     currentWaterLevel.current = THREE.MathUtils.lerp(
       currentWaterLevel.current,
-      machineState === 'washing' ? -0.32 : activeCycle.waterLevel,
-      dt * 1.4
+      targetWater,
+      isDraining ? dt * 4.6 : dt * 1.4
     );
     currentTurbulence.current = THREE.MathUtils.lerp(
       currentTurbulence.current,
-      surgeBoostTimer.current > 0 ? currentTurbulence.current : activeCycle.turbulence,
-      dt * 1.6
+      isDraining ? 0.0 : (surgeBoostTimer.current > 0 ? currentTurbulence.current : activeCycle.turbulence),
+      isDraining ? dt * 4.0 : dt * 1.6
     );
     currentFoamDensity.current = THREE.MathUtils.lerp(
       currentFoamDensity.current,
-      surgeBoostTimer.current > 0 ? currentFoamDensity.current : activeCycle.foamDensity,
-      dt * 1.6
+      targetFoam,
+      isDraining ? dt * 5.0 : dt * 1.6
     );
 
     drumAngle.current += currentAngularVel.current * dt;
@@ -384,8 +394,6 @@ export const DrumScene: React.FC<DrumSceneProps> = ({
     frontWaterMaterial.uniforms.uTurbulence.value = currentTurbulence.current;
     frontWaterMaterial.uniforms.uWaterLevel.value = currentWaterLevel.current;
     frontWaterMaterial.uniforms.uFoamDensity.value = currentFoamDensity.current;
-
-    glassMaterial.uniforms.uTime.value = time;
 
     // 3. BALLS RIGID-BODY PHYSICS & BUOYANCY
     const paddleAngles = [
@@ -536,27 +544,32 @@ export const DrumScene: React.FC<DrumSceneProps> = ({
 
     // 4. UPDATE RISING BUBBLES
     if (bubblesRef.current) {
-      const { dummy, data } = bubbleParticles;
-      const surfaceY = currentWaterLevel.current + 0.1;
-      const speedMult = surgeBoostTimer.current > 0 && surgeType.current === 3 ? 2.8 : 1.0;
+      if (isDraining || currentWaterLevel.current < -1.2) {
+        bubblesRef.current.visible = false;
+      } else {
+        bubblesRef.current.visible = true;
+        const { dummy, data } = bubbleParticles;
+        const surfaceY = currentWaterLevel.current + 0.1;
+        const speedMult = surgeBoostTimer.current > 0 && surgeType.current === 3 ? 2.8 : 1.0;
 
-      for (let b = 0; b < BUBBLE_COUNT; b++) {
-        const bp = data[b];
-        bp.pos.y += bp.speedY * dt * speedMult;
-        bp.pos.x += Math.sin(time * bp.wobbleFreq + bp.offset) * bp.wobbleAmp * dt + spinFactor * 0.03 * dt;
+        for (let b = 0; b < BUBBLE_COUNT; b++) {
+          const bp = data[b];
+          bp.pos.y += bp.speedY * dt * speedMult;
+          bp.pos.x += Math.sin(time * bp.wobbleFreq + bp.offset) * bp.wobbleAmp * dt + spinFactor * 0.03 * dt;
 
-        if (bp.pos.y > surfaceY) {
-          bp.pos.y = -1.9 + Math.random() * 0.4;
-          bp.pos.x = (Math.random() - 0.5) * 2.7;
-          bp.pos.z = -0.8 + Math.random() * 1.1;
+          if (bp.pos.y > surfaceY) {
+            bp.pos.y = -1.9 + Math.random() * 0.4;
+            bp.pos.x = (Math.random() - 0.5) * 2.7;
+            bp.pos.z = -0.8 + Math.random() * 1.1;
+          }
+
+          dummy.position.copy(bp.pos);
+          dummy.scale.set(bp.scale, bp.scale, bp.scale);
+          dummy.updateMatrix();
+          bubblesRef.current.setMatrixAt(b, dummy.matrix);
         }
-
-        dummy.position.copy(bp.pos);
-        dummy.scale.set(bp.scale, bp.scale, bp.scale);
-        dummy.updateMatrix();
-        bubblesRef.current.setMatrixAt(b, dummy.matrix);
+        bubblesRef.current.instanceMatrix.needsUpdate = true;
       }
-      bubblesRef.current.instanceMatrix.needsUpdate = true;
     }
 
     // 5. UPDATE WATER SPLASH DROPLETS (Only active during washing/spinning, zero CPU when idle)
@@ -623,37 +636,6 @@ export const DrumScene: React.FC<DrumSceneProps> = ({
 
       {/* Top Wave Meniscus Specular Rim Light */}
       <directionalLight position={[0.8, 1.8, 2.5]} intensity={1.2} color="#ffffff" />
-
-      {/* ================= 1. EXTERIOR CHASSIS & GASKET ================= */}
-      <mesh position={[0, 0, 0.6]}>
-        <ringGeometry args={[2.08, 2.45, 36]} />
-        <meshStandardMaterial
-          color="#1e2229"
-          roughness={0.35}
-          metalness={0.85}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-
-      <mesh position={[0, 0, 0.35]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[2.08, 2.18, 0.45, 32, 1, true]} />
-        <meshStandardMaterial
-          map={textures.gasket}
-          color="#181a1f"
-          roughness={0.88}
-          metalness={0.1}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-
-      <mesh position={[-2.22, 0.1, 0.62]}>
-        <boxGeometry args={[0.15, 0.65, 0.18]} />
-        <meshStandardMaterial color="#94a3b8" metalness={0.92} roughness={0.2} />
-      </mesh>
-      <mesh position={[2.22, 0.05, 0.62]}>
-        <boxGeometry args={[0.16, 0.45, 0.16]} />
-        <meshStandardMaterial color="#cbd5e1" metalness={0.95} roughness={0.15} />
-      </mesh>
 
       {/* ================= 2. ROTATING STAINLESS STEEL DRUM ================= */}
       <group ref={drumGroupRef}>
@@ -760,12 +742,6 @@ export const DrumScene: React.FC<DrumSceneProps> = ({
         />
       </instancedMesh>
 
-      {/* ================= 5. CURVED GLASS DOOR (ULTRA-CLEAR TEMPERED GLASS) ================= */}
-      <mesh material={glassMaterial} position={[0, 0, 0.53]} rotation={[Math.PI, 0, 0]}>
-        <sphereGeometry
-          args={[2.08, 24, 12, 0, Math.PI * 2, 0, Math.PI / 5.2]}
-        />
-      </mesh>
     </group>
   );
 };

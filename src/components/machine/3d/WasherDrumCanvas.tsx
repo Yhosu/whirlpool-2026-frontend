@@ -98,7 +98,14 @@ export const WasherDrumCanvas: React.FC<WasherDrumCanvasProps> = ({
   return (
     <div
       onClick={handleInteraction}
-      className={`relative w-full h-full overflow-hidden cursor-pointer select-none rounded-full ${className}`}
+      className={`relative w-full h-full overflow-hidden cursor-pointer select-none rounded-full washer-drum-circle ${className}`}
+      style={{
+        borderRadius: '50%',
+        clipPath: 'circle(50% at 50% 50%)',
+        WebkitClipPath: 'circle(50% at 50% 50%)',
+        maskImage: 'radial-gradient(circle, #000000 99.5%, transparent 100%)',
+        WebkitMaskImage: 'radial-gradient(circle, #000000 99.5%, transparent 100%)',
+      }}
       title="Haz clic para agitar el agua y las esferas"
     >
       <Canvas
@@ -109,20 +116,32 @@ export const WasherDrumCanvas: React.FC<WasherDrumCanvasProps> = ({
           far: 15,
         }}
         gl={{
-          antialias: false, // Disabling antialiasing on circular masked drum saves massive GPU fillrate
+          antialias: true,
           alpha: true,
-          powerPreference: 'low-power', // Low-power mode prevents CPU/GPU fans from spinning up
+          powerPreference: 'high-performance',
           stencil: false,
           depth: true,
-          precision: 'mediump', // Smooth and ultra-fast on mobile devices and in-app webviews
+          precision: 'mediump',
         }}
-        dpr={1} // Lock pixel ratio to 1 to prevent burning GPU on Retina/4K displays
+        dpr={1}
         onCreated={({ gl }) => {
           gl.domElement.addEventListener('webglcontextlost', () => {
             setWebGlFailed(true);
           });
+          // Ensure hardware-accelerated canvas layer itself is strictly clipped to circle
+          gl.domElement.style.borderRadius = '50%';
+          gl.domElement.style.clipPath = 'circle(50% at 50% 50%)';
+          gl.domElement.style.setProperty('-webkit-clip-path', 'circle(50% at 50% 50%)');
+          gl.domElement.style.overflow = 'hidden';
         }}
-        className="w-full h-full"
+        className="w-full h-full rounded-full washer-drum-circle"
+        style={{
+          borderRadius: '50%',
+          clipPath: 'circle(50% at 50% 50%)',
+          WebkitClipPath: 'circle(50% at 50% 50%)',
+          maskImage: 'radial-gradient(circle, #000000 99.5%, transparent 100%)',
+          WebkitMaskImage: 'radial-gradient(circle, #000000 99.5%, transparent 100%)',
+        }}
       >
         <Suspense fallback={null}>
           <DrumScene

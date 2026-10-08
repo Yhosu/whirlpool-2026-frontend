@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { WasherDrumCanvas } from './3d/WasherDrumCanvas';
 import { MachineState } from '../../types';
+import { playWaterSplashSound } from '../../utils/sound';
 
 // Appliance assets
 import lavadoraImg from '../../assets/Lavadora Frontal.png';
+import tapaLavadoraImg from '../../assets/Tapa de lavadora 1.png';
 import coin500 from '../../assets/500Bs.png';
-import coin3000 from '../../assets/3000 Bs. 2.png';
+import { CrispPrizeBall } from './CrispPrizeBall';
+import { RealisticWaterTorrentCanvas } from './3d/RealisticWaterTorrentCanvas';
 
 interface WhirlpoolHeroWasherProps {
   isSpinning?: boolean;
@@ -13,7 +16,12 @@ interface WhirlpoolHeroWasherProps {
   isCapOut?: boolean;
   drumState?: MachineState;
   winningCoinImg?: string;
+  prizeAmount?: string | number;
+  waterDrainPhase?: 'none' | 'flushing' | 'draining' | 'drained';
   showTopCoin?: boolean;
+  onControlScreenClick?: () => void;
+  hasActiveCode?: boolean;
+  isIdle?: boolean;
   className?: string;
 }
 
@@ -22,19 +30,54 @@ export const WhirlpoolHeroWasher: React.FC<WhirlpoolHeroWasherProps> = ({
   isDoorOpen = false,
   isCapOut = false,
   drumState = 'idle',
-  winningCoinImg = coin3000,
+  winningCoinImg,
+  prizeAmount,
+  waterDrainPhase: propDrainPhase,
   showTopCoin = false,
+  onControlScreenClick,
+  hasActiveCode = false,
+  isIdle = true,
   className = '',
 }) => {
+  // Water drainage sequence: 'none' -> 'flushing' -> 'draining' -> 'drained'
+  const [internalDrainPhase, setInternalDrainPhase] = React.useState<'none' | 'flushing' | 'draining' | 'drained'>('none');
+  const activeDrainPhase = propDrainPhase !== undefined ? propDrainPhase : internalDrainPhase;
+
+  useEffect(() => {
+    if (isDoorOpen) {
+      setInternalDrainPhase('flushing');
+      const soundTimer = setTimeout(() => {
+        playWaterSplashSound();
+      }, 200);
+
+      // A los 1700ms: el torrente cesa al terminar la apertura suave
+      const drainTimer = setTimeout(() => {
+        setInternalDrainPhase('draining');
+      }, 1700);
+
+      // A los 3000ms: el agua se disolvió completamente por el desagüe
+      const finishedTimer = setTimeout(() => {
+        setInternalDrainPhase('drained');
+      }, 3000);
+
+      return () => {
+        clearTimeout(soundTimer);
+        clearTimeout(drainTimer);
+        clearTimeout(finishedTimer);
+      };
+    } else {
+      setInternalDrainPhase('none');
+    }
+  }, [isDoorOpen]);
+
   return (
     <div className={`relative w-full aspect-[563/794] select-none ${className}`}>
-      {/* Base contact shadow beneath washer */}
-      <div className="absolute -bottom-1.5 inset-x-3 h-3.5 bg-black/75 blur-sm rounded-full pointer-events-none" />
+      {/* Base contact shadow beneath washer on top of podium */}
+      <div className="absolute -bottom-2 inset-x-2 h-4 bg-black/80 blur-md rounded-full pointer-events-none" />
 
-      {/* ================= PREMIO 500 BS. APOYADO SOBRE LA LAVADORA (SOLO SI showTopCoin ES TRUE) ================= */}
+      {/* ================= PREMIO 500 BS. APOYADO SOBRE LA LAVADORA (SOLO EN HOME '/') ================= */}
       {showTopCoin && (
         <div className="absolute left-[34%] -top-[18.5%] w-[31%] aspect-square z-30 pointer-events-none group">
-          {/* Sombra de contacto sobre la superficie superior */}
           <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-[76%] h-[22%] bg-black/80 blur-[2.5px] rounded-[50%]" />
           <img
             src={coin500}
@@ -44,111 +87,177 @@ export const WhirlpoolHeroWasher: React.FC<WhirlpoolHeroWasherProps> = ({
         </div>
       )}
 
-      {/* Realistic Machine Body from Lavadora Frontal.png with subtle vibration during spin */}
+      {/* ================= 1. CUERPO REAL DE LA LAVADORA (LAVADORA FRONTAL.PNG - SIN CAMBIAR) ================= */}
+      {/* Clean, authentic Whirlpool front chassis: NO weird glow, NO pulsing border */}
       <img
         src={lavadoraImg}
         alt="Lavadora Frontal Whirlpool"
-        className={`w-full h-full object-contain drop-shadow-[0_22px_38px_rgba(0,0,0,0.5)] brightness-[1.06] contrast-[1.03] relative z-10 transition-transform ${
-          isSpinning ? 'animate-[pulse_0.12s_ease-in-out_infinite]' : ''
+        className={`w-full h-full object-contain drop-shadow-[0_22px_38px_rgba(0,0,0,0.5)] brightness-[1.02] contrast-[1.02] relative z-10 transition-transform ${
+          isSpinning ? 'translate-y-[0.4px]' : ''
         }`}
       />
 
-      {/* ================= 3D REALISTIC DRUM WITH WATER SHADERS & PRIZE BALLS ================= */}
-      {/* Real 3D experience inside the drum with fluid dynamics, zero CPU lag on the rest of the machine */}
-      <div className="absolute left-[19.2%] top-[26.8%] w-[61.6%] aspect-square rounded-full z-[14] overflow-hidden shadow-[inset_0_4px_22px_rgba(0,0,0,0.9)] bg-[#07090c]">
+      {/* ================= 2. TAMBOR 3D REAL (CIRCULO DE LA PUERTA / TAMBOR) ================= */}
+      {/* Dynamic 3D fluid water & prize spheres swirling inside the porthole aperture */}
+      <div
+        className="absolute left-[19.2%] top-[26.8%] w-[61.6%] aspect-square rounded-full z-[14] overflow-hidden shadow-[inset_0_4px_24px_rgba(0,0,0,0.95)] bg-[#07090c] washer-drum-circle"
+        style={{
+          borderRadius: '50%',
+          clipPath: 'circle(50% at 50% 50%)',
+          WebkitClipPath: 'circle(50% at 50% 50%)',
+          maskImage: 'radial-gradient(circle, #000000 99.5%, transparent 100%)',
+          WebkitMaskImage: 'radial-gradient(circle, #000000 99.5%, transparent 100%)',
+        }}
+      >
         <WasherDrumCanvas
           machineState={drumState}
           className="w-full h-full"
         />
       </div>
 
-      {/* ================= GLOWING ILLUMINATED RIM BORDER AROUND WASHER DRUM ================= */}
+      {/* Bisel perimetral sobrio de cromo oscuro grafito (fiel a la lavadora real) */}
       <div
-        className="absolute left-[18.8%] top-[26.4%] w-[62.4%] aspect-square rounded-full z-[15] pointer-events-none transition-all duration-300"
+        className="absolute left-[19.2%] top-[26.8%] w-[61.6%] aspect-square rounded-full z-[15] pointer-events-none ring-1 ring-white/20 shadow-[inset_0_2px_8px_rgba(0,0,0,0.7)]"
         style={{
-          border: '2.5px solid rgba(255, 230, 130, 0.95)',
-          boxShadow: isSpinning
-            ? '0 0 18px #FDC32B, 0 0 35px #FFE27A, 0 0 50px rgba(253, 195, 43, 0.7), inset 0 0 14px rgba(255,255,255,0.8)'
-            : '0 0 12px rgba(253, 195, 43, 0.85), 0 0 22px rgba(255, 226, 122, 0.55), inset 0 0 10px rgba(255, 255, 255, 0.6), inset 0 0 16px rgba(253, 195, 43, 0.3)',
-          animation: isSpinning
-            ? 'drumRimSpinPulse 0.5s ease-in-out infinite alternate'
-            : 'drumRimGlow 3.5s ease-in-out infinite alternate',
+          borderRadius: '50%',
+          clipPath: 'circle(50% at 50% 50%)',
+          WebkitClipPath: 'circle(50% at 50% 50%)',
         }}
       />
 
-      {/* Secondary Concentric Chrome Bezel Accent Ring */}
-      <div className="absolute left-[19.2%] top-[26.8%] w-[61.6%] aspect-square rounded-full z-[15] pointer-events-none ring-1 ring-white/50 shadow-[inset_0_0_12px_rgba(255,217,94,0.3)]" />
-
-      {/* ================= 3D HINGED GLASS DOOR (SMOKED DARK TRANSPARENT GLASS) ================= */}
-      {/* Como en negro pero transparente: agua y pelotas de premios 100% visibles */}
+      {/* ================= 0. PANTALLA DIGITAL DE CONTROL (TOUCHSCREEN HOTSPOT) ================= */}
+      {/* Ubicada con cálculo milimétrico sobre el rectángulo completo de la pantalla (62.5% X, 2.9% Y, 28.8% W, 11.2% H) */}
       <div
-        className="absolute left-[16.5%] top-[24.1%] w-[67%] aspect-square z-[16] pointer-events-none"
+        className="absolute z-[26]"
         style={{
-          transformOrigin: '0% 50%',
-          transform: isDoorOpen ? 'perspective(1100px) rotateY(-112deg) translateZ(12px)' : 'none',
-          transition: 'transform 0.85s cubic-bezier(0.34, 1.25, 0.64, 1)',
+          left: '62.5%',
+          top: '2.9%',
+          width: '28.8%',
+          height: '11.2%',
         }}
       >
-        {/* Outer dark chrome door frame bezel with handle and hinge */}
-        <div className="relative w-full h-full rounded-full border-[7px] border-[#22262d] shadow-[0_12px_32px_rgba(0,0,0,0.65),inset_0_2px_4px_rgba(255,255,255,0.2)] flex items-center justify-center overflow-hidden">
-          {/* Inner chrome accent line */}
-          <div className="absolute inset-0 rounded-full border border-white/20 pointer-events-none" />
-
-          {/* Smoked Dark Transparent Glass Window (Como en negro pero transparente) */}
-          <div className="w-full h-full rounded-full bg-[radial-gradient(circle_at_45%_40%,rgba(15,20,28,0.08)_0%,rgba(10,14,20,0.22)_65%,rgba(0,0,0,0.50)_100%)] relative overflow-hidden backdrop-brightness-[0.94]">
-            {/* Curved optical glass specular reflection arc */}
-            <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.20)_0%,rgba(255,255,255,0.03)_32%,transparent_55%)] pointer-events-none" />
-            
-            {/* Secondary bottom specular reflection crescent */}
-            <div className="absolute -bottom-6 -right-6 w-32 h-32 rounded-full bg-white/5 blur-sm pointer-events-none" />
-          </div>
-
-          {/* Right edge door handle latch detail */}
-          <div className="absolute right-1 top-1/2 -translate-y-1/2 w-2 h-7 bg-[#475569] rounded-l-md shadow-md border-l border-white/30" />
-        </div>
-      </div>
-
-      {/* ================= REALISTIC WATER SPILL & CASCADE (POURING OUT OF THE DRUM) ================= */}
-      <div
-        className={`absolute left-[33%] top-[72%] w-[34%] h-[24%] z-[18] pointer-events-none transition-all duration-700 ${
-          isDoorOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-4 scale-75'
-        }`}
-      >
-        {/* Waterfall flow stream */}
-        <div className="relative w-full h-full flex flex-col items-center">
-          {/* Glistening water sheet spilling over the lower chrome rim */}
-          <div className="w-[82%] h-[65%] rounded-b-2xl bg-gradient-to-b from-[#38bdf8]/75 via-[#0284c7]/65 to-transparent blur-[0.5px] shadow-[0_8px_16px_rgba(56,189,248,0.5)] relative overflow-hidden">
-            {/* Animated water specular ripple highlights */}
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,#ffffff_0%,transparent_70%)] opacity-80 animate-pulse" />
-          </div>
-
-          {/* Water splash droplets and mist at impact bottom */}
-          <div className="w-[110%] h-[35%] -mt-1 flex items-center justify-center relative">
-            <div className="absolute w-[90%] h-3 bg-[#38bdf8]/50 blur-sm rounded-full" />
-            <div className="w-2.5 h-2.5 rounded-full bg-white/90 shadow-[0_0_8px_#38bdf8] animate-ping" />
-            <div className="w-1.5 h-1.5 rounded-full bg-white/80 shadow-[0_0_6px_#38bdf8] mx-3 animate-bounce" />
-            <div className="w-2 h-2 rounded-full bg-white/90 shadow-[0_0_8px_#38bdf8] animate-ping" />
-          </div>
-        </div>
-      </div>
-
-      {/* ================= PRIZE EJECTION AURA & CAPSULE ================= */}
-      <div className="absolute left-1/2 top-[62%] -translate-x-1/2 -translate-y-1/2 z-[25] pointer-events-none">
-        <div
-          className="w-[140px] sm:w-[170px] aspect-square transition-all duration-700 ease-out flex items-center justify-center"
-          style={{
-            opacity: isCapOut ? 1 : 0,
-            transform: isCapOut ? 'scale(1.4) translateY(12%)' : 'scale(0.2) translateY(-60%)',
-            filter: 'drop-shadow(0 0 35px #FDC32B) drop-shadow(0 0 15px #FFD95E)',
-          }}
+        <button
+          type="button"
+          onClick={onControlScreenClick}
+          aria-label="Pantalla de control digital Whirlpool: Clic para introducir código"
+          className="w-full h-full relative rounded-[6px] cursor-pointer group focus:outline-none transition-transform active:scale-[0.98]"
         >
-          <img
-            src={winningCoinImg}
-            alt="Premio Ganador"
-            className="w-full h-full object-contain animate-bounce-subtle"
+          {/* Borde ultra-brillante con resplandor neón cyan + oro reflectante (animate-screen-glow) */}
+          <div className="absolute -inset-[3px] rounded-[8px] border-[2.5px] border-white animate-screen-glow pointer-events-none transition-all group-hover:border-[#FDC32B] group-hover:shadow-[0_0_30px_rgba(253,195,43,1),0_0_65px_rgba(0,229,255,0.95),inset_0_0_20px_rgba(255,255,255,1)]" />
+
+          {/* Destello de cristal iluminado con gradiente translúcido */}
+          <div className="absolute inset-0 rounded-[5px] bg-gradient-to-tr from-cyan-400/25 via-white/15 to-amber-300/20 backdrop-brightness-125 transition-opacity group-hover:opacity-100 pointer-events-none" />
+
+          {/* Línea de escaneo / brillo tenue diagonal constante */}
+          <div className="absolute inset-0 rounded-[5px] overflow-hidden pointer-events-none">
+            <div className="w-[200%] h-full bg-gradient-to-r from-transparent via-white/35 to-transparent -translate-x-full animate-btn-shimmer" />
+          </div>
+        </button>
+
+        {/* Flecha animada llamativa señalando la pantalla: "Click aquí para introducir el código" */}
+        {!hasActiveCode && isIdle && (
+          <div
+            onClick={onControlScreenClick}
+            className="absolute -top-10 sm:-top-12 right-0 sm:right-1 z-30 cursor-pointer flex flex-col items-center animate-bounce-subtle pointer-events-auto"
+          >
+            <div className="bg-[#101010] text-[#FDC32B] border-2 border-[#FDC32B] text-[10px] sm:text-xs font-black uppercase tracking-wider px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl shadow-[0_6px_22px_rgba(0,0,0,0.7)] whitespace-nowrap flex items-center gap-1.5 hover:scale-105 transition-transform">
+              <span className="w-2 h-2 rounded-full bg-[#FDC32B] animate-ping" />
+              <span className="hidden sm:inline">Click aquí para introducir el código</span>
+              <span className="inline sm:hidden">Toca para ingresar código</span>
+            </div>
+            {/* Punta de flecha hacia abajo */}
+            <div className="w-0 h-0 border-x-[6px] border-x-transparent border-t-[8px] border-t-[#FDC32B] -mt-[1px]" />
+          </div>
+        )}
+      </div>
+
+      {/* ================= 3. TAPA DE LA LAVADORA EN 3D (TAPA DE LAVADORA 1.PNG) ================= */}
+      {/* Tapa transparente con refracción y bisagra a la izquierda que se abre en perspectiva 3D */}
+      <div
+        className="absolute left-[16.5%] top-[24.1%] w-[67%] aspect-square z-[24] pointer-events-none"
+        style={{
+          transformOrigin: '0% 50%',
+          WebkitTransformOrigin: '0% 50%',
+          transform: isDoorOpen ? 'perspective(1100px) rotateY(-78deg) translateZ(14px)' : 'none',
+          WebkitTransform: isDoorOpen ? 'perspective(1100px) rotateY(-78deg) translateZ(14px)' : 'none',
+          transition: 'transform 1.65s cubic-bezier(0.25, 0.95, 0.4, 1)',
+          WebkitTransition: '-webkit-transform 1.65s cubic-bezier(0.25, 0.95, 0.4, 1)',
+          backfaceVisibility: 'visible',
+          WebkitBackfaceVisibility: 'visible',
+        }}
+      >
+        {/* Resplandor luminoso activo ÚNICAMENTE en la tapa durante el centrifugado */}
+        {isSpinning && (
+          <div
+            className="absolute -inset-2.5 rounded-full pointer-events-none animate-door-glow -z-10"
+            style={{ borderRadius: '50%' }}
           />
+        )}
+
+        {/* Marco exterior de la compuerta con tirador ergonómico */}
+        <div
+          className={`relative w-full h-full rounded-full border-[7px] flex items-center justify-center overflow-hidden transition-all duration-500 ${
+            isSpinning
+              ? 'border-[#FFD95E] shadow-[0_0_32px_rgba(253,195,43,0.95),0_0_55px_rgba(0,229,255,0.65),inset_0_0_20px_rgba(255,255,255,0.85)]'
+              : isDoorOpen
+                ? 'border-[#374151] shadow-[-18px_10px_35px_rgba(0,0,0,0.85),inset_0_2px_4px_rgba(255,255,255,0.4)]'
+                : 'border-[#22262d] shadow-[0_12px_32px_rgba(0,0,0,0.65),inset_0_2px_4px_rgba(255,255,255,0.2)]'
+          }`}
+        >
+          {/* Anillo de cromo interior con destello giratorio durante el centrifugado */}
+          {isSpinning && (
+            <div
+              className="absolute inset-0 rounded-full pointer-events-none animate-door-shimmer"
+              style={{
+                background:
+                  'conic-gradient(from 0deg, transparent 0%, rgba(253,195,43,0.85) 25%, transparent 50%, rgba(255,255,255,0.95) 75%, transparent 100%)',
+                maskImage: 'radial-gradient(circle, transparent 64%, black 66%)',
+                WebkitMaskImage: 'radial-gradient(circle, transparent 64%, black 66%)',
+              }}
+            />
+          )}
+          <div className="absolute inset-0 rounded-full border border-white/25 pointer-events-none" />
+
+          {/* Vidrio cristalino: alta transparencia cerrado (25%), visible y tangible abierto (85%) */}
+          <div className="w-full h-full rounded-full relative overflow-hidden bg-[radial-gradient(circle_at_35%_25%,rgba(255,255,255,0.18)_0%,rgba(255,255,255,0.03)_40%,transparent_75%)]">
+            <img
+              src={tapaLavadoraImg}
+              alt="Tapa de lavadora"
+              className={`w-full h-full object-contain pointer-events-none drop-shadow transition-opacity duration-700 ${
+                isDoorOpen ? 'opacity-85 brightness-110' : 'opacity-25'
+              }`}
+            />
+            {/* Reflejo especular curvo de cristal óptico fino */}
+            <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.25)_0%,rgba(255,255,255,0.03)_28%,transparent_50%)] pointer-events-none" />
+          </div>
+
+          {/* Pestillo / tirador derecho de la puerta */}
+          <div className="absolute right-1 top-1/2 -translate-y-1/2 w-2.5 h-8 bg-[#546274] rounded-l-md shadow-md border-l border-white/40" />
         </div>
       </div>
+
+      {/* ================= 4. TORRENTE REALISTA DE AGUA 3D CAYENDO DEL TAMBOR AL PODIO ================= */}
+      {/* Simulación en Canvas de fluido parabólico, caústicas vivas y gotas de impacto sobre el podio */}
+      <RealisticWaterTorrentCanvas phase={activeDrainPhase} />
+
+      {/* ================= 5. PELOTA DE PREMIO APOYADA DIRECTAMENTE SOBRE EL CHARCO DE AGUA ================= */}
+      {/* Al terminar, la pelota se asienta sobre el agua desparramada en primer plano teniéndola como soporte */}
+      {isCapOut && (prizeAmount || winningCoinImg) ? (
+        <div
+          className="absolute left-1/2 top-[96%] sm:top-[97%] -translate-x-1/2 -translate-y-1/2 z-[25] pointer-events-none transition-all duration-700 ease-out opacity-100 scale-100"
+        >
+          <div className="relative w-[190px] sm:w-[230px] aspect-square flex items-center justify-center animate-water-ball-eject">
+            <div className="w-full h-full animate-ball-float">
+              <CrispPrizeBall
+                amount={prizeAmount || ''}
+                fallbackImg={winningCoinImg}
+                className="w-full h-full"
+                isOnWater={true}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

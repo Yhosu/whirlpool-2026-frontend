@@ -128,34 +128,6 @@ export const Machine: React.FC<MachineProps> = ({
         {/* Multi-directional, non-repeating 3D shooting star orbiting around the appliances */}
         <OrbitalComet3D />
       </div>
-
-      <style>{`
-        @keyframes drumRimGlow {
-          0% {
-            box-shadow: 0 0 10px rgba(253, 195, 43, 0.75), 0 0 20px rgba(255, 217, 94, 0.5), inset 0 0 8px rgba(255, 255, 255, 0.4);
-            border-color: rgba(255, 226, 122, 0.85);
-          }
-          50% {
-            box-shadow: 0 0 18px rgba(253, 195, 43, 1), 0 0 32px rgba(255, 226, 122, 0.8), 0 0 45px rgba(253, 195, 43, 0.45), inset 0 0 14px rgba(255, 255, 255, 0.75);
-            border-color: #FFFFFF;
-          }
-          100% {
-            box-shadow: 0 0 12px rgba(253, 195, 43, 0.8), 0 0 22px rgba(255, 217, 94, 0.55), inset 0 0 9px rgba(255, 255, 255, 0.45);
-            border-color: rgba(255, 235, 150, 0.95);
-          }
-        }
-
-        @keyframes drumRimSpinPulse {
-          0% {
-            box-shadow: 0 0 16px #FDC32B, 0 0 28px #FFE27A, inset 0 0 10px #FFFFFF;
-            border-color: #FFE27A;
-          }
-          100% {
-            box-shadow: 0 0 25px #FDC32B, 0 0 45px #FFD95E, 0 0 60px rgba(253, 195, 43, 0.8), inset 0 0 18px #FFFFFF;
-            border-color: #FFFFFF;
-          }
-        }
-      `}</style>
     </div>
   );
 };
