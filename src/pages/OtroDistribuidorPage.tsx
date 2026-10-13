@@ -411,16 +411,13 @@ export const OtroDistribuidorPage: React.FC = () => {
                         <span className="text-zinc-400">Celular:</span>
                         <span className="font-mono font-bold text-white">{cellphone}</span>
                       </div>
-                      {assignedCode && (
-                        <div className="flex items-center justify-between text-xs pb-2 border-b border-white/10">
-                          <span className="text-zinc-400">Código Asignado:</span>
-                          <span className="font-mono font-bold text-[#FDC32B]">{assignedCode}</span>
-                        </div>
-                      )}
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-zinc-400">Estado:</span>
                         <span className="font-bold text-amber-400 uppercase text-[11px]">En validación</span>
                       </div>
+                      {assignedCode && (
+                        <div></div>
+                      )}
                     </div>
 
                     <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">

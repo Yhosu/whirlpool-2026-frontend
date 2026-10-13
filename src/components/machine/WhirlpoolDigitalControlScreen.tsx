@@ -231,6 +231,7 @@ export const WhirlpoolDigitalControlScreen: React.FC<WhirlpoolDigitalControlScre
 
   const handleConsultarClick = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isChecking) return;
     setIsButtonPressed(true);
     setTimeout(() => setIsButtonPressed(false), 250);
 

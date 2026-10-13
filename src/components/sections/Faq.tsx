@@ -65,7 +65,7 @@ export const Faq: React.FC = () => {
       icon: ShoppingBag,
       answer: (
         <p className="text-[#6F6756] text-[15px] sm:text-[15.5px] leading-relaxed">
-          Cualquier producto Whirlpool comprado entre el 12 de octubre y el 15 de noviembre de 2026 en los puntos de venta participantes.
+          Cualquier producto Whirlpool comprado entre el 12 de octubre y el 15 de noviembre de 2026 en los puntos de venta participantes (excepto accesorios y repuestos).
         </p>
       ),
     },

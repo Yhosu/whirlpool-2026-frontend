@@ -137,7 +137,7 @@ Todas las respuestas del backend siguen el estándar de `ApiResponseService`:
 
 * **Método:** `POST`
 * **Endpoint:** `/api/mark-as-used`
-* **Descripción:** Se debe invocar una vez concluido el giro en la ruleta/lavadora para pasar el estado del formulario de `registered` a `used`, evitando que se vuelva a jugar el mismo intento.
+* **Descripción:** Se debe invocar una vez concluido el giro en la ruleta/lavadora para pasar el estado del formulario de `registered` a `used`, evitando que se vuelva a jugar el mismo intento. Devuelve el premio asignado, código de cupón y vigencia (en caso de Dismac) o confirmación de cashback / transferencia (en caso de Mercado Informal).
 
 ### Payload de Envío (Request Body JSON):
 ```json
@@ -147,42 +147,131 @@ Todas las respuestas del backend siguen el estándar de `ApiResponseService`:
 }
 ```
 
-### Explicación de campos:
-* **`id`** *(Obligatorio, UUID)*: Identificador único obtenido previamente de `last_form.id`.
-* **`control_code`** *(Opcional, String)*: Código de control para comprobación de seguridad adicional.
+* `id` *(Obligatorio, String UUID)*: Identificador obtenido previamente de `last_form.id` en `/api/check-code`.
+* `control_code` *(Opcional, String)*: Código de control de la factura (en caso de compras Dismac).
 
 ---
 
-### Respuesta Exitosa (`200 OK`):
+### CASO 1: Participante Dismac (`type = "dismac"`)
+
+En compras de Dismac, el usuario gana un **cupón digital / Gift Card de Dismac** cargado desde el inventario de cupones.
+
 ```json
 {
   "process": true,
   "message": "Formulario marcado como utilizado con éxito.",
   "data": {
     "id": "e4b3c2a1-5d6e-4f7a-8b9c-0d1e2f3a4b5c",
-    "code": "A1B2C3",
+    "name": "Pedro Sánchez",
+    "ci_number": "4567890",
+    "cellphone": "71122334",
+    "city": "Santa Cruz",
+    "type": "dismac",
+    "business_unit": "ECO",
+    "control_code": "CTRL-98765",
     "status": "used",
     "is_scratched": 1,
+    "code": "F5714PCDQW",
+    "code_id": "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+    "expiration_date": "2027-01-04 14:18:17",
+    "assigned_code": {
+      "id": "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+      "code": "F5714PCDQW",
+      "product_code": "TC1000S",
+      "value": 1000,
+      "expiration_date": "2027-01-04 14:18:17",
+      "days_valid": 90
+    },
+    "prize_id": "00a4aab0-7f51-402f-8d32-06958f4ed6c9",
     "prize": {
-      "id": 5,
-      "name": "Microondas Whirlpool 20L"
-    }
+      "id": "00a4aab0-7f51-402f-8d32-06958f4ed6c9",
+      "name": "Premio 1000 Bs",
+      "description": "Premio en efectivo / voucher de 1000 Bs",
+      "amount": "1000.00"
+    },
+    "branch_id": "377d6e80-2d7c-4706-a97a-b194e9855c6e",
+    "branch": {
+      "id": "377d6e80-2d7c-4706-a97a-b194e9855c6e",
+      "name": "Central Dismac",
+      "channel": "ECOMMERCE",
+      "city": "Santa Cruz"
+    },
+    "invoice_url": "https://siat.impuestos.gob.bo/...",
+    "sale_id": "d1c2b3a4-..."
   },
   "errors": []
 }
 ```
 
+* **`data.code`**: Código del cupón / Gift Card a canjear en Dismac (ej. `"F5714PCDQW"`).
+* **`data.expiration_date`**: Fecha límite de validez del cupón (ej. `"2027-01-04 14:18:17"`).
+* **`data.assigned_code.value`**: Monto del cupón en Bs (ej. `1000`).
+* **`data.prize.name`**: Nombre del premio (ej. `"Premio 1000 Bs"`).
+
+---
+
+### CASO 2: Participante Mercado Informal (`type = "informal-market"`)
+
+En compras de Mercado Informal, el participante recibe un premio en efectivo / cashback de la sucursal de Mayoristas. **No se asigna cupón de Dismac**.
+
+```json
+{
+  "process": true,
+  "message": "Formulario marcado como utilizado con éxito.",
+  "data": {
+    "id": "e4b3c2a1-5d6e-4f7a-8b9c-0d1e2f3a4b5c",
+    "name": "María Fernández",
+    "ci_number": "9876543",
+    "cellphone": "72233445",
+    "city": "Santa Cruz",
+    "type": "informal-market",
+    "business_unit": "MERCADO INFORMAL",
+    "control_code": null,
+    "status": "used",
+    "is_scratched": 1,
+    "code": "G7K9X2",
+    "code_id": null,
+    "expiration_date": null,
+    "assigned_code": null,
+    "prize_id": "85f67a72-8dc7-4d7a-a37d-1ddebb91fcd2",
+    "prize": {
+      "id": "85f67a72-8dc7-4d7a-a37d-1ddebb91fcd2",
+      "name": "Premio 250 Bs",
+      "description": "Premio en efectivo / voucher de 250 Bs",
+      "amount": "250.00"
+    },
+    "branch_id": "4dda0906-cc45-40df-a95c-6f95292f5677",
+    "branch": {
+      "id": "4dda0906-cc45-40df-a95c-6f95292f5677",
+      "name": "CashBack Mayoristas",
+      "channel": "MAYORISTA",
+      "city": "Santa Cruz"
+    },
+    "invoice_url": "invoices/informal/abc12345.jpg",
+    "sale_id": null
+  },
+  "errors": []
+}
+```
+
+* **`data.code`**: Código único de 6 caracteres asignado al registrar el formulario (ej. `"G7K9X2"`).
+* **`data.prize.name`**: Nombre del premio obtenido (ej. `"Premio 250 Bs"`).
+* **`data.prize.amount`**: Monto en Bs (ej. `"250.00"`).
+* **`data.assigned_code`**: `null`.
+* **`data.code_id`**: `null`.
+* **Modalidad**: Se muestra `Transferencia bancaria`.
+
 ---
 
 ### Errores posibles:
 
-#### El UUID no existe (`404 Not Found`):
+#### No hay stock disponible (`400 Bad Request`):
 ```json
 {
   "process": false,
-  "message": "Formulario no encontrado.",
+  "message": "No hay stock disponible.",
   "errors": [
-    "No se encontró ningún registro con el identificador UUID proporcionado."
+    "No hay stock disponible."
   ],
   "data": {}
 }
@@ -203,13 +292,13 @@ Todas las respuestas del backend siguen el estándar de `ApiResponseService`:
 }
 ```
 
-#### El código de control no corresponde (`400 Bad Request`):
+#### El UUID no existe (`404 Not Found`):
 ```json
 {
   "process": false,
-  "message": "El código de control no coincide.",
+  "message": "Formulario no encontrado.",
   "errors": [
-    "El código de control enviado no coincide con el formulario."
+    "No se encontró ningún registro con el identificador UUID proporcionado."
   ],
   "data": {}
 }

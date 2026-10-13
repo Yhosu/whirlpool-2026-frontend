@@ -82,7 +82,7 @@ export const Hero: React.FC<HeroProps> = ({
               <img src={iconCompras} alt="" className="w-full h-full object-contain" />
             </div>
             <span className="font-display text-[#101010] text-xs sm:text-base md:text-xl font-black tracking-wider">
-              COMPRAS
+              COMPRA
             </span>
           </div>
 
@@ -96,7 +96,7 @@ export const Hero: React.FC<HeroProps> = ({
               <img src={iconParticipas} alt="" className="w-full h-full object-contain" />
             </div>
             <span className="font-display text-[#101010] text-xs sm:text-base md:text-xl font-black tracking-wider">
-              PARTICIPAS
+              PARTICIPA
             </span>
           </div>
 
@@ -110,14 +110,14 @@ export const Hero: React.FC<HeroProps> = ({
               <img src={iconGanas} alt="" className="w-full h-full object-contain" />
             </div>
             <span className="font-display text-[#101010] text-xs sm:text-base md:text-xl font-black tracking-wider">
-              GANAS
+              GANA
             </span>
           </div>
         </div>
 
         {/* Promotion Dates */}
         <p className="mt-4 font-extrabold text-[clamp(13px,3.2vw,16px)] text-[#101010]">
-          Del 9 de Octubre al 8 de Noviembre de 2026.
+          Del 12 de Octubre al 15 de Noviembre de 2026.
         </p>
       </div>
     </header>
