@@ -28,6 +28,15 @@ export interface BackendFormItem {
   status: 'registered' | 'used' | 'pending';
   business_unit?: string;
   type?: 'dismac' | 'informal-market';
+  assigned_code?: {
+    id?: string;
+    code?: string;
+    product_code?: string;
+    value?: number;
+    expiration_date?: string;
+    days_valid?: number;
+  };
+  expiration_date?: string;
   prize?: {
     id: number | string;
     name: string;
@@ -60,12 +69,23 @@ export interface BackendCheckCodeData {
     id: string;
     code: string;
     control_code?: string;
+    name?: string;
+    type?: 'dismac' | 'informal-market' | string;
     status: 'used';
     prize?: {
       id: number | string;
       name: string;
       amount?: string | number;
     };
+    assigned_code?: {
+      id?: string;
+      code?: string;
+      product_code?: string;
+      value?: number;
+      expiration_date?: string;
+      days_valid?: number;
+    };
+    expiration_date?: string;
     created_at?: string;
   }>;
 }
@@ -103,6 +123,15 @@ export interface BackendMarkAsUsedData {
   prize_id?: string;
   branch_id?: string;
   control_code?: string;
+  assigned_code?: {
+    id?: string;
+    code?: string;
+    product_code?: string;
+    value?: number;
+    expiration_date?: string;
+    days_valid?: number;
+  };
+  expiration_date?: string;
   prize: BackendPrize;
   branch?: BackendBranch;
 }
@@ -155,8 +184,12 @@ export interface PremioCanjeado {
   monto?: number;
   prizeId?: string; // UUID del premio asignado por el backend
   tipoPremio: 'vale_dismac' | 'efectivo_transferencia';
+  tipo?: 'dismac' | 'otro_distribuidor';
   fecha: string;
   ticketId: string;
+  code?: string; // Código de cupón Dismac o ticket (ej. B5713GFK2Q)
+  couponCode?: string; // Alias explícito
+  expirationDate?: string;
   controlCode?: string; // Código de control de la compra
   estado: 'used';
 }
@@ -301,19 +334,28 @@ class HttpService {
             const fallbackItem = (data.used_forms && data.used_forms[0]) as any;
 
             // Mapeo de premios canjeados previamente
-            const historialPremios: PremioCanjeado[] = (data.used_forms || []).map((u: any, idx: number) => ({
-              id: u.id,
-              intentoNumero: idx + 1,
-              premio: u.prize?.name || 'Premio Whirlpool',
-              monto: u.prize?.amount ? parseFloat(String(u.prize.amount)) : 0,
-              tipoPremio: 'vale_dismac',
-              fecha: u.created_at
-                ? new Date(u.created_at).toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' })
-                : 'Canjeado',
-              ticketId: u.code,
-              controlCode: u.control_code || lastForm?.control_code || cleanCode,
-              estado: 'used',
-            }));
+            const historialPremios: PremioCanjeado[] = (data.used_forms || []).map((u: any, idx: number) => {
+              const couponCode = u.code || u.assigned_code?.code || '';
+              const isInformal = (u.type || lastForm?.type || fallbackItem?.type) === 'informal-market';
+              return {
+                id: u.id,
+                intentoNumero: idx + 1,
+                premio: u.prize?.name || 'Premio Whirlpool',
+                monto: u.prize?.amount ? parseFloat(String(u.prize.amount)) : 0,
+                prizeId: u.prize_id || u.prize?.id,
+                tipoPremio: isInformal ? 'efectivo_transferencia' : 'vale_dismac',
+                tipo: isInformal ? 'otro_distribuidor' : 'dismac',
+                fecha: u.created_at
+                  ? new Date(u.created_at).toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' })
+                  : 'Canjeado',
+                ticketId: couponCode,
+                code: couponCode,
+                couponCode: couponCode,
+                expirationDate: u.expiration_date || u.assigned_code?.expiration_date,
+                controlCode: u.control_code || lastForm?.control_code || cleanCode,
+                estado: 'used',
+              };
+            });
 
             // Determinar formularios registrados e historial
             const currentForm = (data.last_form || (data.registered_forms && data.registered_forms[0])) as any;
@@ -422,6 +464,8 @@ class HttpService {
 
       const prizeName = data.prize.name;
       const prizeAmountNum = data.prize.amount ? parseFloat(String(data.prize.amount)) : 0;
+      const couponCode = data.code || data.assigned_code?.code || '';
+      const isInformal = data.type === 'informal-market';
 
       const premioCanjeado: PremioCanjeado = {
         id: data.id,
@@ -429,9 +473,13 @@ class HttpService {
         premio: prizeName,
         monto: prizeAmountNum,
         prizeId: data.prize_id || data.prize.id,
-        tipoPremio: 'vale_dismac',
+        tipoPremio: isInformal ? 'efectivo_transferencia' : 'vale_dismac',
+        tipo: isInformal ? 'otro_distribuidor' : 'dismac',
         fecha: formattedDate,
-        ticketId: data.code,
+        ticketId: couponCode,
+        code: couponCode,
+        couponCode: couponCode,
+        expirationDate: data.expiration_date || data.assigned_code?.expiration_date,
         controlCode: data.control_code || controlCode || cleanCode,
         estado: 'used',
       };

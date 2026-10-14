@@ -12,6 +12,9 @@ import {
   Clock,
   Award,
   X,
+  Ticket,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { httpService, VerificarCodigoResult, PremioCanjeado } from '../services/httpService';
 import {
@@ -21,6 +24,7 @@ import {
   playCapsuleEjectSound,
   playWaterSplashSound,
   playWinSound,
+  startSpinSound,
 } from '../utils/sound';
 import confetti from 'canvas-confetti';
 import { LegalBar } from '../components/sections/LegalBar';
@@ -55,6 +59,32 @@ const getCoinImage = (amt?: number | string) => {
   return coin100;
 };
 
+// Helper to format coupon expiration dates cleanly
+const formatExpirationDate = (dateStr?: string) => {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr.replace(' ', 'T'));
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+};
+
+// Helper for offline demo spin testing without API
+const getDemoCodeData = (customCode?: string): VerificarCodigoResult => ({
+  codigo: customCode || 'DEMO-SPIN-2026',
+  controlCode: customCode || 'DEMO-SPIN-2026',
+  tipo: customCode?.startsWith('DIS') ? 'dismac' : 'otro_distribuidor',
+  valido: true,
+  nombreCliente: 'Usuario Demo',
+  tienda: 'Whirlpool Special Days Demo',
+  intentosDisponibles: 10,
+  proximoPremio: null,
+  premiosCanjeados: [],
+  lastFormId: 'demo-form-uuid-9999',
+});
+
 export const GirarPage: React.FC = () => {
   // Always reset scroll to the top when navigating to this page
   useEffect(() => {
@@ -80,12 +110,48 @@ export const GirarPage: React.FC = () => {
 
   // Cinematic Aerial Camera Tilt: Triggers smoothly when door finishes opening and prize emerges
   const isDoorOpenTest = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('testDoor') === 'open';
+  const isDemoSpin = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === 'spin';
   const isAerial = isDoorOpenTest || machinePhase === 'awarding' || machinePhase === 'revealed';
+
+  // Demo Spin Mode: Auto-initialize mock code so testing the animation requires zero setup or backend
+  useEffect(() => {
+    if (isDemoSpin && !activeCodeData) {
+      setActiveCodeData(getDemoCodeData());
+    }
+  }, [isDemoSpin, activeCodeData]);
 
   const toggleMute = () => {
     const next = !muted;
     setMuted(next);
     setSoundMuted(next);
+  };
+
+  // Clipboard copy state & handler with feedback
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyCode = (text?: string, id?: string) => {
+    if (!text) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(text);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+      const targetId = id || text;
+      setCopiedId(targetId);
+      setTimeout(() => {
+        setCopiedId((prev) => (prev === targetId ? null : prev));
+      }, 2000);
+    } catch {
+      // ignore clipboard error
+    }
   };
 
   // Prevent double click on query submit
@@ -102,6 +168,15 @@ export const GirarPage: React.FC = () => {
     playClickSound();
     setIsChecking(true);
     setErrorMessage('');
+
+    if (isDemoSpin) {
+      setTimeout(() => {
+        setActiveCodeData(getDemoCodeData(trimmed));
+        setIsChecking(false);
+        setIsModalOpen(false);
+      }, 250);
+      return;
+    }
 
     try {
       const res = await httpService.girar.verificarCodigo(trimmed);
@@ -126,19 +201,19 @@ export const GirarPage: React.FC = () => {
     // Prevent double clicking / multiple triggers
     if (machinePhase !== 'idle' || isChecking) return;
 
-    // If user hasn't entered a code yet, open the modal to get a code
-    if (!activeCodeData) {
+    // If user hasn't entered a code yet, open the modal to get a code (unless in demo mode)
+    if (!activeCodeData && !isDemoSpin) {
       playClickSound();
       setIsModalOpen(true);
       return;
     }
 
-    if (activeCodeData.intentosDisponibles <= 0) {
+    if (!isDemoSpin && activeCodeData && activeCodeData.intentosDisponibles <= 0) {
       setErrorMessage('Este código no tiene más intentos disponibles.');
       return;
     }
 
-    if (!activeCodeData.lastFormId) {
+    if (!isDemoSpin && activeCodeData && !activeCodeData.lastFormId) {
       setErrorMessage('No se encontró el identificador del formulario para este intento. Por favor consulta tu código nuevamente.');
       return;
     }
@@ -152,31 +227,69 @@ export const GirarPage: React.FC = () => {
     setWaterDrainPhase('none');
     document.getElementById('washer-stage')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-    // 2. Ejecutar la petición al backend en paralelo mientras el tambor ya está girando a alta velocidad
-    const intentoNumero = (activeCodeData.premiosCanjeados?.length || 0) + 1;
-    const spinPromise = httpService.girar.completarGiro(
-      activeCodeData.codigo,
-      intentoNumero,
-      activeCodeData.lastFormId,
-      activeCodeData.controlCode,
-      activeCodeData.intentosDisponibles
-    );
+    const stopSpinAudio = startSpinSound();
 
-    // Garantizar al menos 2400ms de centrifugado para una experiencia fluida y realista
-    const spinDelayPromise = new Promise((resolve) => setTimeout(resolve, 2400));
+    let spinResult: any;
 
-    let spinResult;
-    try {
-      const [res] = await Promise.all([spinPromise, spinDelayPromise]);
-      spinResult = res;
-    } catch (err: any) {
+    if (isDemoSpin) {
+      // 2. MODO DEMO: Simular giro y animación completa sin interactuar con la API
+      await new Promise((resolve) => setTimeout(resolve, 2400));
+      stopSpinAudio();
+
+      const demoPrizes = ['Bs. 3.000', 'Bs. 2.000', 'Bs. 1.000', 'Bs. 500', 'Bs. 250', 'Bs. 100'];
+      const randomPrize = demoPrizes[Math.floor(Math.random() * demoPrizes.length)];
+      const currentAttempts = activeCodeData?.intentosDisponibles ?? 10;
+
       spinResult = {
-        process: false,
-        success: false,
-        statusCode: 500,
-        message: err?.message || 'Error de conexión al procesar el giro.',
-        errors: [err?.message || 'Error de conexión.'],
+        process: true,
+        success: true,
+        statusCode: 200,
+        message: 'Giro demo completado con éxito',
+        data: {
+          premio: {
+            id: `demo-prize-${Date.now()}`,
+            intentoNumero: (activeCodeData?.premiosCanjeados?.length || 0) + 1,
+            premio: randomPrize,
+            tipoPremio: 'vale_dismac',
+            tipo: 'dismac',
+            fecha: new Date().toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' }),
+            ticketId: `DISMAC-${Math.floor(100000 + Math.random() * 900000)}`,
+            code: `DISMAC-${Math.floor(100000 + Math.random() * 900000)}`,
+            couponCode: `DISMAC-${Math.floor(100000 + Math.random() * 900000)}`,
+            expirationDate: '2026-12-31 23:59:59',
+            estado: 'used',
+          } as PremioCanjeado,
+          intentosRestantes: Math.max(1, currentAttempts - 1),
+        },
       };
+    } else {
+      // 2. Ejecutar la petición al backend en paralelo mientras el tambor ya está girando a alta velocidad
+      const intentoNumero = (activeCodeData?.premiosCanjeados?.length || 0) + 1;
+      const spinPromise = httpService.girar.completarGiro(
+        activeCodeData!.codigo,
+        intentoNumero,
+        activeCodeData!.lastFormId!,
+        activeCodeData!.controlCode,
+        activeCodeData!.intentosDisponibles
+      );
+
+      // Garantizar al menos 2400ms de centrifugado para una experiencia fluida y realista
+      const spinDelayPromise = new Promise((resolve) => setTimeout(resolve, 2400));
+
+      try {
+        const [res] = await Promise.all([spinPromise, spinDelayPromise]);
+        spinResult = res;
+      } catch (err: any) {
+        spinResult = {
+          process: false,
+          success: false,
+          statusCode: 500,
+          message: err?.message || 'Error de conexión al procesar el giro.',
+          errors: [err?.message || 'Error de conexión.'],
+        };
+      } finally {
+        stopSpinAudio();
+      }
     }
 
     // 3. Evaluar respuesta del backend:
@@ -192,13 +305,16 @@ export const GirarPage: React.FC = () => {
       setErrorMessage(backendMsg);
 
       if (backendMsg.toLowerCase().includes('utilizado') || backendMsg.toLowerCase().includes('used')) {
-        try {
-          const fresh = await httpService.girar.verificarCodigo(activeCodeData.controlCode || activeCodeData.codigo);
-          if (fresh.success && fresh.data) {
-            setActiveCodeData(fresh.data);
+        const codeToVerify = activeCodeData?.controlCode || activeCodeData?.codigo;
+        if (codeToVerify) {
+          try {
+            const fresh = await httpService.girar.verificarCodigo(codeToVerify);
+            if (fresh.success && fresh.data) {
+              setActiveCodeData(fresh.data);
+            }
+          } catch {
+            // ignore
           }
-        } catch {
-          // ignore
         }
       }
       return;
@@ -266,10 +382,21 @@ export const GirarPage: React.FC = () => {
     setMachinePhase('idle');
     setWaterDrainPhase('none');
     setCurrentPrize(null);
+    if (isDemoSpin && (!activeCodeData || activeCodeData.intentosDisponibles <= 1)) {
+      setActiveCodeData((prev) =>
+        prev
+          ? { ...prev, intentosDisponibles: 10 }
+          : getDemoCodeData()
+      );
+    }
   };
 
   const handleAbrirNuevoCodigo = () => {
     playClickSound();
+    if (isDemoSpin) {
+      handleResetForNextAttempt();
+      return;
+    }
     setActiveCodeData(null);
     setCodigoInput('');
     setErrorMessage('');
@@ -344,6 +471,14 @@ export const GirarPage: React.FC = () => {
             />
           </div>
 
+          {/* Demo Mode Notice */}
+          {isDemoSpin && (
+            <div className="mb-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 text-[#101010] font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg border border-black/20 animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
+              <span>Modo Demo Activo • Prueba de Animación (Sin API)</span>
+            </div>
+          )}
+
           {/* ================= HERO WASHING MACHINE STAGE (FULL WIDTH EN MÓVILES, TABLETS Y TÓTEMS) ================= */}
           <div
             id="washer-stage"
@@ -400,6 +535,10 @@ export const GirarPage: React.FC = () => {
                   prizeAmount={isDoorOpenTest ? 'Bs. 3.000' : currentPrize?.premio}
                   waterDrainPhase={isDoorOpenTest ? 'draining' : waterDrainPhase}
                   onControlScreenClick={() => {
+                    if (isDemoSpin && machinePhase === 'idle') {
+                      handleStartSpin();
+                      return;
+                    }
                     playClickSound();
                     setIsModalOpen(true);
                   }}
@@ -437,7 +576,9 @@ export const GirarPage: React.FC = () => {
               {/* Badge nítido del código activo (organizado prolijamente fuera de la imagen de la lavadora) */}
               <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-[#11161F]/90 backdrop-blur-md border border-[#232F3E] text-xs font-mono shadow-md">
                 <span className="w-2 h-2 rounded-full bg-[#00E5FF] shadow-[0_0_8px_#00E5FF] animate-pulse" />
-                <span className="text-slate-400 font-sans text-[11px] font-semibold uppercase tracking-wider">Código ingresado:</span>
+                <span className="text-slate-400 font-sans text-[11px] font-semibold uppercase tracking-wider">
+                  {isDemoSpin ? 'Modo de Prueba:' : 'Código ingresado:'}
+                </span>
                 <span className="font-bold text-[#00E5FF] tracking-wider text-xs sm:text-sm">{activeCodeData.controlCode || activeCodeData.codigo}</span>
               </div>
 
@@ -449,7 +590,7 @@ export const GirarPage: React.FC = () => {
                 >
                   <span className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/60 to-transparent animate-btn-shimmer pointer-events-none" />
                   <RotateCw className="w-5 h-5 sm:w-6 sm:h-6 animate-spin-slow" />
-                  <span>¡Girar Ahora!</span>
+                  <span>{isDemoSpin ? '¡Girar Demo!' : '¡Girar Ahora!'}</span>
                   <span className="text-xs sm:text-sm font-mono bg-[#101010] text-[#FDC32B] px-2.5 py-0.5 rounded-full ml-1">
                     {activeCodeData.intentosDisponibles} {activeCodeData.intentosDisponibles === 1 ? 'giro' : 'giros'}
                   </span>
@@ -501,6 +642,50 @@ export const GirarPage: React.FC = () => {
                 ¡{currentPrize.premio}!
               </h2>
 
+              {/* Cupón de canje / Gift Card Dismac */}
+              {(currentPrize.code || currentPrize.couponCode || currentPrize.ticketId) && (
+                <div className="mt-5 p-4 bg-[#FFFBF0] border-2 border-[#101010] rounded-2xl max-w-sm mx-auto shadow-sm">
+                  <div className="flex items-center justify-center gap-1.5 mb-1.5 text-xs font-black uppercase tracking-wider text-[#6F6756]">
+                    <Ticket className="w-4 h-4 text-[#FDC32B]" />
+                    <span>
+                      {activeCodeData?.tipo === 'dismac' || currentPrize.tipo === 'dismac' || currentPrize.tipoPremio === 'vale_dismac'
+                        ? 'Tu Cupón Dismac para Canjear:'
+                        : 'Código de Canje:'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="font-mono text-lg sm:text-xl font-black text-[#101010] tracking-widest bg-white px-3.5 py-1.5 rounded-xl border border-[#101010] select-all shadow-inner">
+                      {currentPrize.code || currentPrize.couponCode || currentPrize.ticketId}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCode(currentPrize.code || currentPrize.couponCode || currentPrize.ticketId, 'banner')}
+                      className="px-3 py-2 bg-[#101010] hover:bg-[#252525] text-[#FDC32B] rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow active:scale-95 flex-none"
+                    >
+                      {copiedId === 'banner' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>¡Copiado!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copiar</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {currentPrize.expirationDate && (
+                    <p className="text-[10px] text-[#8E887A] font-semibold mt-2">
+                      Válido hasta: {formatExpirationDate(currentPrize.expirationDate)}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                 {activeCodeData && activeCodeData.intentosDisponibles > 0 ? (
                   <button
@@ -550,38 +735,84 @@ export const GirarPage: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {activeCodeData.premiosCanjeados.map((premio) => (
-                  <div
-                    key={premio.id}
-                    className="bg-white rounded-2xl p-5 border-2 border-[#101010] shadow-[0_6px_20px_rgba(42,36,24,0.08)] flex items-center gap-4 transition-transform hover:-translate-y-0.5"
-                  >
-                    <div className="w-16 h-16 flex-none rounded-xl bg-[#FFFBF0] border border-[#E6DDC6] p-1 flex items-center justify-center shadow-inner">
-                      <CrispPrizeBall
-                        amount={premio.premio}
-                        fallbackImg={getCoinImage(premio.premio)}
-                        className="w-full h-full"
-                      />
-                    </div>
+                {activeCodeData.premiosCanjeados.map((premio) => {
+                  const coupon = premio.code || premio.couponCode || premio.ticketId;
+                  const isDismac = activeCodeData.tipo === 'dismac' || premio.tipo === 'dismac' || premio.tipoPremio === 'vale_dismac';
+                  const isCopied = copiedId === (premio.id || coupon);
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1 mb-1">
-                        <span className="font-display text-lg font-black text-[#101010] truncate">
-                          {premio.premio}
-                        </span>
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex-none">
-                          Canjeado
-                        </span>
+                  return (
+                    <div
+                      key={premio.id}
+                      className="bg-white rounded-2xl p-4 sm:p-5 border-2 border-[#101010] shadow-[0_6px_20px_rgba(42,36,24,0.08)] flex flex-col justify-between transition-transform hover:-translate-y-0.5"
+                    >
+                      <div className="flex items-center gap-3.5 sm:gap-4">
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 flex-none rounded-xl bg-[#FFFBF0] border border-[#E6DDC6] p-1 flex items-center justify-center shadow-inner">
+                          <CrispPrizeBall
+                            amount={premio.premio}
+                            fallbackImg={getCoinImage(premio.premio)}
+                            className="w-full h-full"
+                          />
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1 mb-1">
+                            <span className="font-display text-lg font-black text-[#101010] truncate">
+                              {premio.premio}
+                            </span>
+                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex-none">
+                              Canjeado
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-[11px] text-[#8E887A] flex-wrap">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {premio.fecha}
+                            </span>
+                            {premio.expirationDate && (
+                              <span>• Vence: {formatExpirationDate(premio.expirationDate)}</span>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-3 text-[11px] text-[#8E887A] mt-2 pt-1.5 border-t border-[#E6DDC6]/60">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {premio.fecha}
-                        </span>
-                      </div>
+                      {/* Cupón de canje Dismac si aplica */}
+                      {isDismac && coupon && (
+                        <div className="mt-3 pt-3 border-t border-[#E6DDC6]/70 flex items-center justify-between gap-2 bg-[#FFFBF0] rounded-xl px-3 py-2 border border-[#E6DDC6]">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Ticket className="w-4 h-4 text-[#FDC32B] flex-none" />
+                            <div className="flex flex-col text-left min-w-0">
+                              <span className="text-[9px] uppercase font-bold tracking-wider text-[#6F6756]">
+                                Cupón de canje Dismac
+                              </span>
+                              <span className="font-mono text-sm font-black text-[#101010] tracking-wider truncate select-all">
+                                {coupon}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleCopyCode(coupon, premio.id || coupon)}
+                            className="px-2.5 py-1 bg-white hover:bg-[#FDC32B] text-[#101010] border border-[#101010]/30 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer flex-none shadow-sm active:scale-95"
+                          >
+                            {isCopied ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Copiado</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>Copiar</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -624,42 +855,123 @@ export const GirarPage: React.FC = () => {
             {activeCodeData && (
               <div className="mt-3 bg-[#14181F] rounded-2xl border-2 border-[#384252] p-4 text-left shadow-2xl">
                 {activeCodeData.intentosDisponibles > 0 ? (
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#1A1F29] p-3.5 rounded-xl border border-[#2B3544]">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-base font-black text-[#00E5FF] tracking-wider">
-                          {activeCodeData.controlCode || activeCodeData.codigo}
-                        </span>
-                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/50">
-                          Código Válido
-                        </span>
+                  <div className="space-y-3 bg-[#1A1F29] p-3.5 rounded-xl border border-[#2B3544]">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-base font-black text-[#00E5FF] tracking-wider">
+                            {activeCodeData.controlCode || activeCodeData.codigo}
+                          </span>
+                          <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/50">
+                            Código Válido
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#9AA5B5] mt-0.5">
+                          {activeCodeData.tipo === 'dismac'
+                            ? 'Compra en tienda Dismac'
+                            : 'Compra en distribuidor de mercado'}
+                        </p>
                       </div>
-                      <p className="text-xs text-[#9AA5B5] mt-0.5">
-                        {activeCodeData.tipo === 'dismac'
-                          ? 'Compra en tienda Dismac'
-                          : 'Compra en distribuidor de mercado'}
-                      </p>
+
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-mono text-xs font-bold bg-[#0A0D11] text-[#FDC32B] border border-[#FDC32B]/40 px-3 py-1.5 rounded-lg shadow-inner">
+                          {`${activeCodeData.intentosDisponibles} ${activeCodeData.intentosDisponibles === 1 ? 'giro disponible' : 'giros disponibles'}`}
+                        </span>
+
+                        {machinePhase === 'idle' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsModalOpen(false);
+                              handleStartSpin();
+                            }}
+                            className="relative overflow-hidden bg-gradient-to-r from-[#FDC32B] via-[#FFE27A] to-[#FDC32B] hover:brightness-110 active:scale-95 text-[#101010] font-black text-xs uppercase tracking-wider px-4 py-2.5 rounded-lg border border-[#FDC32B] shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                          >
+                            <RotateCw className="w-3.5 h-3.5" />
+                            <span>¡Girar Ahora!</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2.5">
-                      <span className="font-mono text-xs font-bold bg-[#0A0D11] text-[#FDC32B] border border-[#FDC32B]/40 px-3 py-1.5 rounded-lg shadow-inner">
-                        {`${activeCodeData.intentosDisponibles} ${activeCodeData.intentosDisponibles === 1 ? 'giro disponible' : 'giros disponibles'}`}
-                      </span>
+                    {/* Si ya canjeó giros previos pero le quedan giros disponibles */}
+                    {activeCodeData.premiosCanjeados && activeCodeData.premiosCanjeados.length > 0 && (
+                      <div className="pt-2 border-t border-[#2B3544]">
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-2 flex items-center gap-1.5">
+                          <Award className="w-3.5 h-3.5 text-[#FDC32B]" />
+                          <span>Premios ganados con este código:</span>
+                        </div>
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                          {activeCodeData.premiosCanjeados.map((premio) => {
+                            const coupon = premio.code || premio.couponCode || premio.ticketId;
+                            const isDismac = activeCodeData.tipo === 'dismac' || premio.tipo === 'dismac' || premio.tipoPremio === 'vale_dismac';
+                            const isCopied = copiedId === (premio.id || coupon);
 
-                      {machinePhase === 'idle' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsModalOpen(false);
-                            handleStartSpin();
-                          }}
-                          className="relative overflow-hidden bg-gradient-to-r from-[#FDC32B] via-[#FFE27A] to-[#FDC32B] hover:brightness-110 active:scale-95 text-[#101010] font-black text-xs uppercase tracking-wider px-4 py-2.5 rounded-lg border border-[#FDC32B] shadow-md transition-all cursor-pointer flex items-center gap-1.5"
-                        >
-                          <RotateCw className="w-3.5 h-3.5" />
-                          <span>¡Girar Ahora!</span>
-                        </button>
-                      )}
-                    </div>
+                            return (
+                              <div
+                                key={premio.id}
+                                className="bg-[#0D1014] border border-[#2B313A] rounded-xl p-2.5 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <img
+                                    src={getCoinImage(premio.premio)}
+                                    alt={premio.premio}
+                                    className="w-8 h-8 sm:w-9 sm:h-9 object-contain flex-none drop-shadow"
+                                  />
+                                  <div className="min-w-0">
+                                    <div className="font-display font-black text-xs sm:text-sm text-white truncate">
+                                      {premio.premio}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5 flex-wrap">
+                                      <span className="flex items-center gap-1">
+                                        <Clock className="w-2.5 h-2.5 text-slate-500" />
+                                        {premio.fecha}
+                                      </span>
+                                      {premio.expirationDate && (
+                                        <span className="text-slate-400">
+                                          • Vence: {formatExpirationDate(premio.expirationDate)}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
+                                  {isDismac && coupon && (
+                                    <div className="flex items-center gap-2 bg-[#141820] border border-[#00E5FF]/40 rounded-lg px-2.5 py-1">
+                                      <div className="flex flex-col text-left">
+                                        <span className="text-[8.5px] uppercase font-bold tracking-wider text-[#00E5FF]/80">
+                                          Cupón Dismac
+                                        </span>
+                                        <span className="font-mono text-xs sm:text-sm font-black text-[#00E5FF] tracking-wider select-all">
+                                          {coupon}
+                                        </span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCopyCode(coupon, premio.id || coupon)}
+                                        title="Copiar cupón Dismac"
+                                        className="p-1 hover:bg-[#00E5FF]/20 text-slate-300 hover:text-[#00E5FF] rounded transition-colors cursor-pointer"
+                                      >
+                                        {isCopied ? (
+                                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                        ) : (
+                                          <Copy className="w-3.5 h-3.5" />
+                                        )}
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  <span className="text-[9.5px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/50 flex-none">
+                                    Canjeado
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3 bg-[#1A1F29] p-3.5 rounded-xl border border-[#2B3544]">
@@ -691,33 +1003,75 @@ export const GirarPage: React.FC = () => {
                           <Award className="w-3.5 h-3.5 text-[#FDC32B]" />
                           <span>Premios ganados con este código:</span>
                         </div>
-                        <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                          {activeCodeData.premiosCanjeados.map((premio) => (
-                            <div
-                              key={premio.id}
-                              className="bg-[#0D1014] border border-[#2B313A] rounded-xl p-2 sm:p-2.5 flex items-center justify-between gap-3"
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <img
-                                  src={getCoinImage(premio.premio)}
-                                  alt={premio.premio}
-                                  className="w-7 h-7 sm:w-8 sm:h-8 object-contain flex-none drop-shadow"
-                                />
-                                <div className="truncate">
-                                  <div className="font-display font-black text-xs sm:text-sm text-white truncate">
-                                    {premio.premio}
-                                  </div>
-                                  <div className="text-[10px] text-slate-400 flex items-center gap-1">
-                                    <Clock className="w-2.5 h-2.5" />
-                                    {premio.fecha}
+                        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                          {activeCodeData.premiosCanjeados.map((premio) => {
+                            const coupon = premio.code || premio.couponCode || premio.ticketId;
+                            const isDismac = activeCodeData.tipo === 'dismac' || premio.tipo === 'dismac' || premio.tipoPremio === 'vale_dismac';
+                            const isCopied = copiedId === (premio.id || coupon);
+
+                            return (
+                              <div
+                                key={premio.id}
+                                className="bg-[#0D1014] border border-[#2B313A] rounded-xl p-2.5 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <img
+                                    src={getCoinImage(premio.premio)}
+                                    alt={premio.premio}
+                                    className="w-8 h-8 sm:w-9 sm:h-9 object-contain flex-none drop-shadow"
+                                  />
+                                  <div className="min-w-0">
+                                    <div className="font-display font-black text-xs sm:text-sm text-white truncate">
+                                      {premio.premio}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5 flex-wrap">
+                                      <span className="flex items-center gap-1">
+                                        <Clock className="w-2.5 h-2.5 text-slate-500" />
+                                        {premio.fecha}
+                                      </span>
+                                      {premio.expirationDate && (
+                                        <span className="text-slate-400">
+                                          • Vence: {formatExpirationDate(premio.expirationDate)}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
+
+                                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
+                                  {/* CÓDIGO DE CUPÓN PARA DISMAC */}
+                                  {isDismac && coupon && (
+                                    <div className="flex items-center gap-2 bg-[#141820] border border-[#00E5FF]/40 rounded-lg px-2.5 py-1">
+                                      <div className="flex flex-col text-left">
+                                        <span className="text-[8.5px] uppercase font-bold tracking-wider text-[#00E5FF]/80">
+                                          Cupón Dismac
+                                        </span>
+                                        <span className="font-mono text-xs sm:text-sm font-black text-[#00E5FF] tracking-wider select-all">
+                                          {coupon}
+                                        </span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCopyCode(coupon, premio.id || coupon)}
+                                        title="Copiar cupón Dismac"
+                                        className="p-1 hover:bg-[#00E5FF]/20 text-slate-300 hover:text-[#00E5FF] rounded transition-colors cursor-pointer"
+                                      >
+                                        {isCopied ? (
+                                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                        ) : (
+                                          <Copy className="w-3.5 h-3.5" />
+                                        )}
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  <span className="text-[9.5px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/50 flex-none">
+                                    Canjeado
+                                  </span>
+                                </div>
                               </div>
-                              <span className="text-[9.5px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/50 flex-none">
-                                Canjeado
-                              </span>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}

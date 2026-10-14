@@ -29,6 +29,16 @@ export const SpecialDaysApp: React.FC = () => {
   const [isBusy, setIsBusy] = useState<boolean>(false);
   const [result, setResult] = useState<PrizeResultData | null>(null);
 
+  // Auto-trigger demo spin if ?demo=spin is in URL
+  React.useEffect(() => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === 'spin') {
+      const timer = setTimeout(() => {
+        handleSpinSubmit('dismac', 'DEMO-SPIN-2026');
+      }, 700);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   const handleReset = () => {
     setMachineState('idle');
     setReadoutText('Listo para girar');
