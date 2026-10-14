@@ -15,6 +15,7 @@ import {
   Ticket,
   Copy,
   Check,
+  CreditCard,
 } from 'lucide-react';
 import { httpService, VerificarCodigoResult, PremioCanjeado } from '../services/httpService';
 import {
@@ -642,47 +643,55 @@ export const GirarPage: React.FC = () => {
                 ¡{currentPrize.premio}!
               </h2>
 
-              {/* Cupón de canje / Gift Card Dismac */}
-              {(currentPrize.code || currentPrize.couponCode || currentPrize.ticketId) && (
-                <div className="mt-5 p-4 bg-[#FFFBF0] border-2 border-[#101010] rounded-2xl max-w-sm mx-auto shadow-sm">
-                  <div className="flex items-center justify-center gap-1.5 mb-1.5 text-xs font-black uppercase tracking-wider text-[#6F6756]">
-                    <Ticket className="w-4 h-4 text-[#FDC32B]" />
-                    <span>
-                      {activeCodeData?.tipo === 'dismac' || currentPrize.tipo === 'dismac' || currentPrize.tipoPremio === 'vale_dismac'
-                        ? 'Tu Cupón Dismac para Canjear:'
-                        : 'Código de Canje:'}
-                    </span>
+              {/* Cupón de canje Dismac O Transferencia para Mercado Informal */}
+              {activeCodeData?.tipo === 'dismac' || currentPrize.tipo === 'dismac' || currentPrize.tipoPremio === 'vale_dismac' ? (
+                (currentPrize.code || currentPrize.couponCode) && (
+                  <div className="mt-5 p-4 bg-[#FFFBF0] border-2 border-[#101010] rounded-2xl max-w-sm mx-auto shadow-sm">
+                    <div className="flex items-center justify-center gap-1.5 mb-1.5 text-xs font-black uppercase tracking-wider text-[#6F6756]">
+                      <Ticket className="w-4 h-4 text-[#FDC32B]" />
+                      <span>Tu Cupón Dismac para Canjear:</span>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="font-mono text-lg sm:text-xl font-black text-[#101010] tracking-widest bg-white px-3.5 py-1.5 rounded-xl border border-[#101010] select-all shadow-inner">
+                        {currentPrize.code || currentPrize.couponCode}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCopyCode(currentPrize.code || currentPrize.couponCode, 'banner')}
+                        className="px-3 py-2 bg-[#101010] hover:bg-[#252525] text-[#FDC32B] rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow active:scale-95 flex-none"
+                      >
+                        {copiedId === 'banner' ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>¡Copiado!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copiar</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {currentPrize.expirationDate && (
+                      <p className="text-[10px] text-[#8E887A] font-semibold mt-2">
+                        Válido hasta: {formatExpirationDate(currentPrize.expirationDate)}
+                      </p>
+                    )}
                   </div>
-
-                  <div className="flex items-center justify-center gap-2">
-                    <span className="font-mono text-lg sm:text-xl font-black text-[#101010] tracking-widest bg-white px-3.5 py-1.5 rounded-xl border border-[#101010] select-all shadow-inner">
-                      {currentPrize.code || currentPrize.couponCode || currentPrize.ticketId}
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() => handleCopyCode(currentPrize.code || currentPrize.couponCode || currentPrize.ticketId, 'banner')}
-                      className="px-3 py-2 bg-[#101010] hover:bg-[#252525] text-[#FDC32B] rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow active:scale-95 flex-none"
-                    >
-                      {copiedId === 'banner' ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>¡Copiado!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copiar</span>
-                        </>
-                      )}
-                    </button>
+                )
+              ) : (
+                <div className="mt-5 p-4 bg-[#F6FDF9] border-2 border-emerald-600 rounded-2xl max-w-md mx-auto shadow-sm text-center">
+                  <div className="flex items-center justify-center gap-1.5 mb-1 text-xs font-black uppercase tracking-wider text-emerald-800">
+                    <CreditCard className="w-4 h-4 text-emerald-600" />
+                    <span>Modalidad: Transferencia Bancaria</span>
                   </div>
-
-                  {currentPrize.expirationDate && (
-                    <p className="text-[10px] text-[#8E887A] font-semibold mt-2">
-                      Válido hasta: {formatExpirationDate(currentPrize.expirationDate)}
-                    </p>
-                  )}
+                  <p className="text-[11px] text-[#6F6756] mt-1 leading-snug">
+                    No requiere cupón. Nuestro equipo coordinará la transferencia a tu número de celular registrado.
+                  </p>
                 </div>
               )}
 
@@ -776,8 +785,8 @@ export const GirarPage: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Cupón de canje Dismac si aplica */}
-                      {isDismac && coupon && (
+                      {/* Cupón de canje Dismac O Modalidad Transferencia */}
+                      {isDismac && coupon ? (
                         <div className="mt-3 pt-3 border-t border-[#E6DDC6]/70 flex items-center justify-between gap-2 bg-[#FFFBF0] rounded-xl px-3 py-2 border border-[#E6DDC6]">
                           <div className="flex items-center gap-2 min-w-0">
                             <Ticket className="w-4 h-4 text-[#FDC32B] flex-none" />
@@ -808,6 +817,23 @@ export const GirarPage: React.FC = () => {
                               </>
                             )}
                           </button>
+                        </div>
+                      ) : (
+                        <div className="mt-3 pt-3 border-t border-[#E6DDC6]/70 flex items-center justify-between gap-2 bg-[#F6FDF9] rounded-xl px-3 py-2 border border-emerald-200">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <CreditCard className="w-4 h-4 text-emerald-600 flex-none" />
+                            <div className="flex flex-col text-left min-w-0">
+                              <span className="text-[9px] uppercase font-bold tracking-wider text-emerald-700">
+                                Modalidad de entrega
+                              </span>
+                              <span className="text-xs font-bold text-[#101010] truncate">
+                                Transferencia bancaria
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-mono font-bold bg-[#101010] text-[#FDC32B] px-2 py-0.5 rounded-md flex-none">
+                            Mercado informal
+                          </span>
                         </div>
                       )}
                     </div>
@@ -937,7 +963,8 @@ export const GirarPage: React.FC = () => {
                                 </div>
 
                                 <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
-                                  {isDismac && coupon && (
+                                  {/* CÓDIGO DE CUPÓN PARA DISMAC O MODALIDAD TRANSFERENCIA */}
+                                  {isDismac && coupon ? (
                                     <div className="flex items-center gap-2 bg-[#141820] border border-[#00E5FF]/40 rounded-lg px-2.5 py-1">
                                       <div className="flex flex-col text-left">
                                         <span className="text-[8.5px] uppercase font-bold tracking-wider text-[#00E5FF]/80">
@@ -959,6 +986,18 @@ export const GirarPage: React.FC = () => {
                                           <Copy className="w-3.5 h-3.5" />
                                         )}
                                       </button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1.5 bg-[#142017] border border-emerald-500/40 rounded-lg px-2.5 py-1">
+                                      <CreditCard className="w-3.5 h-3.5 text-emerald-400 flex-none" />
+                                      <div className="flex flex-col text-left">
+                                        <span className="text-[8px] uppercase font-bold tracking-wider text-emerald-400">
+                                          Modalidad
+                                        </span>
+                                        <span className="text-[11px] font-bold text-slate-200 whitespace-nowrap">
+                                          Transferencia bancaria
+                                        </span>
+                                      </div>
                                     </div>
                                   )}
 
@@ -1039,8 +1078,8 @@ export const GirarPage: React.FC = () => {
                                 </div>
 
                                 <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
-                                  {/* CÓDIGO DE CUPÓN PARA DISMAC */}
-                                  {isDismac && coupon && (
+                                  {/* CÓDIGO DE CUPÓN PARA DISMAC O MODALIDAD TRANSFERENCIA */}
+                                  {isDismac && coupon ? (
                                     <div className="flex items-center gap-2 bg-[#141820] border border-[#00E5FF]/40 rounded-lg px-2.5 py-1">
                                       <div className="flex flex-col text-left">
                                         <span className="text-[8.5px] uppercase font-bold tracking-wider text-[#00E5FF]/80">
@@ -1062,6 +1101,18 @@ export const GirarPage: React.FC = () => {
                                           <Copy className="w-3.5 h-3.5" />
                                         )}
                                       </button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1.5 bg-[#142017] border border-emerald-500/40 rounded-lg px-2.5 py-1">
+                                      <CreditCard className="w-3.5 h-3.5 text-emerald-400 flex-none" />
+                                      <div className="flex flex-col text-left">
+                                        <span className="text-[8px] uppercase font-bold tracking-wider text-emerald-400">
+                                          Modalidad
+                                        </span>
+                                        <span className="text-[11px] font-bold text-slate-200 whitespace-nowrap">
+                                          Transferencia bancaria
+                                        </span>
+                                      </div>
                                     </div>
                                   )}
 

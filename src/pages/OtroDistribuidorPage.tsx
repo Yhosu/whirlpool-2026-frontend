@@ -12,6 +12,7 @@ import {
   FileCheck,
   RotateCw,
   ImageIcon,
+  ChevronDown,
 } from 'lucide-react';
 import { httpService } from '../services/httpService';
 import { Machine } from '../components/machine/Machine';
@@ -25,11 +26,12 @@ import texturaFondoImg from '../assets/textura-fondo.png';
 import tituloImg from '../assets/titulo.png';
 
 const BOLIVIA_CITIES = [
-  'Santa Cruz',
-  'La Paz',
+  'Chuquisaca',
   'Cochabamba',
   'El Alto',
-  'Sucre',
+  'La Paz',
+  'Montero',
+  'Santa Cruz',
   'Tarija',
 ];
 
@@ -321,17 +323,20 @@ export const OtroDistribuidorPage: React.FC = () => {
                           <Building2 className="w-3.5 h-3.5 text-[#FDC32B]" />
                           Ciudad de Compra *
                         </label>
-                        <select
-                          value={city}
-                          onChange={(e) => setCity(e.target.value)}
-                          className="w-full bg-black/50 backdrop-blur-sm border border-white/20 focus:border-[#FDC32B] focus:ring-2 focus:ring-[#FDC32B]/30 rounded-xl px-4 py-3.5 text-white text-sm outline-none transition-all shadow-inner"
-                        >
-                          {BOLIVIA_CITIES.map((c) => (
-                            <option key={c} value={c} className="bg-[#1A1A1A] text-white">
-                              {c}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="relative">
+                          <select
+                            value={city}
+                            onChange={(e) => setCity(e.target.value)}
+                            className="w-full appearance-none bg-black/60 backdrop-blur-sm border border-white/20 focus:border-[#FDC32B] focus:ring-2 focus:ring-[#FDC32B]/30 rounded-xl pl-4 pr-11 py-3.5 text-white text-sm outline-none transition-all shadow-inner cursor-pointer"
+                          >
+                            {BOLIVIA_CITIES.map((c) => (
+                              <option key={c} value={c} className="bg-[#141820] text-white py-2">
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="w-4 h-4 text-[#FDC32B] pointer-events-none absolute right-4 top-1/2 -translate-y-1/2" />
+                        </div>
                       </div>
 
                       {/* FIELD 5: file (Captura de Factura / Nota de Venta) con Optimización */}

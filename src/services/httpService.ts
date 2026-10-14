@@ -335,8 +335,11 @@ class HttpService {
 
             // Mapeo de premios canjeados previamente
             const historialPremios: PremioCanjeado[] = (data.used_forms || []).map((u: any, idx: number) => {
-              const couponCode = u.code || u.assigned_code?.code || '';
               const isInformal = (u.type || lastForm?.type || fallbackItem?.type) === 'informal-market';
+              // En Dismac el cupón viene en assigned_code.code o en u.code.
+              // En Mercado Informal NO existe cupón de Dismac (assigned_code es null, modalidad transferencia/efectivo).
+              const couponCode = isInformal ? undefined : (u.assigned_code?.code || u.code || undefined);
+
               return {
                 id: u.id,
                 intentoNumero: idx + 1,
@@ -348,10 +351,10 @@ class HttpService {
                 fecha: u.created_at
                   ? new Date(u.created_at).toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' })
                   : 'Canjeado',
-                ticketId: couponCode,
+                ticketId: u.code || cleanCode,
                 code: couponCode,
                 couponCode: couponCode,
-                expirationDate: u.expiration_date || u.assigned_code?.expiration_date,
+                expirationDate: isInformal ? undefined : (u.expiration_date || u.assigned_code?.expiration_date),
                 controlCode: u.control_code || lastForm?.control_code || cleanCode,
                 estado: 'used',
               };
@@ -464,8 +467,8 @@ class HttpService {
 
       const prizeName = data.prize.name;
       const prizeAmountNum = data.prize.amount ? parseFloat(String(data.prize.amount)) : 0;
-      const couponCode = data.code || data.assigned_code?.code || '';
       const isInformal = data.type === 'informal-market';
+      const couponCode = isInformal ? undefined : (data.assigned_code?.code || data.code || undefined);
 
       const premioCanjeado: PremioCanjeado = {
         id: data.id,
@@ -476,10 +479,10 @@ class HttpService {
         tipoPremio: isInformal ? 'efectivo_transferencia' : 'vale_dismac',
         tipo: isInformal ? 'otro_distribuidor' : 'dismac',
         fecha: formattedDate,
-        ticketId: couponCode,
+        ticketId: data.code,
         code: couponCode,
         couponCode: couponCode,
-        expirationDate: data.expiration_date || data.assigned_code?.expiration_date,
+        expirationDate: isInformal ? undefined : (data.expiration_date || data.assigned_code?.expiration_date),
         controlCode: data.control_code || controlCode || cleanCode,
         estado: 'used',
       };
