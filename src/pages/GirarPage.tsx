@@ -16,6 +16,8 @@ import {
   Copy,
   Check,
   CreditCard,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { httpService, VerificarCodigoResult, PremioCanjeado } from '../services/httpService';
 import {
@@ -153,6 +155,16 @@ export const GirarPage: React.FC = () => {
     } catch {
       // ignore clipboard error
     }
+  };
+
+  // Visibility state for coupon codes (masked with * * * * * * by default)
+  const [revealedCodes, setRevealedCodes] = useState<Record<string, boolean>>({});
+
+  const toggleCodeVisibility = (id: string) => {
+    setRevealedCodes((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
   };
 
   // Prevent double click on query submit
@@ -628,81 +640,100 @@ export const GirarPage: React.FC = () => {
 
           {/* ================= VICTORY BANNER & NEXT ACTION ================= */}
           {machinePhase === 'revealed' && currentPrize && (
-            <div id="prize-banner" className="w-full max-w-[620px] bg-white rounded-3xl p-6 sm:p-8 border-2 border-[#101010] shadow-[0_16px_40px_rgba(0,0,0,0.2)] text-center my-6 animate-fade-in relative overflow-hidden">
-              <div className="absolute top-0 inset-x-0 h-2 bg-gradient-to-r from-[#FDC32B] via-[#FFE27A] to-[#FDC32B]" />
+            <div
+              id="prize-banner"
+              className="w-full max-w-[760px] sm:max-w-[820px] md:max-w-[880px] bg-white rounded-[2rem] sm:rounded-[2.5rem] p-6 sm:p-10 md:p-12 border-[3px] border-[#101010] shadow-[0_24px_60px_rgba(0,0,0,0.22)] text-center my-6 sm:my-10 animate-fade-in relative overflow-hidden"
+            >
+              <div className="absolute top-0 inset-x-0 h-2.5 sm:h-3 bg-gradient-to-r from-[#FDC32B] via-[#FFE27A] to-[#FDC32B]" />
 
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-[#FFFBF0] border border-[#E6DDC6] flex items-center justify-center text-[#101010] shadow-sm mb-3">
-                <Gift className="w-8 h-8 text-[#FDC32B]" />
+              <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto rounded-2xl sm:rounded-3xl bg-[#FFFBF0] border-2 border-[#E6DDC6] flex items-center justify-center text-[#101010] shadow-md mb-3 sm:mb-4">
+                <Gift className="w-9 h-9 sm:w-11 sm:h-11 text-[#FDC32B]" />
               </div>
 
-              <span className="text-xs font-mono uppercase tracking-widest text-[#6F6756] font-bold">
+              <span className="text-xs sm:text-sm md:text-base font-mono uppercase tracking-widest text-[#6F6756] font-bold">
                 ¡Felicidades Ganaste!
               </span>
 
-              <h2 className="font-display text-3xl sm:text-5xl text-[#101010] font-black tracking-tight mt-2">
+              <h2 className="font-display text-4xl sm:text-6xl md:text-7xl text-[#101010] font-black tracking-tight mt-2 sm:mt-3">
                 ¡{currentPrize.premio}!
               </h2>
 
               {/* Cupón de canje Dismac O Transferencia para Mercado Informal */}
               {activeCodeData?.tipo === 'dismac' || currentPrize.tipo === 'dismac' || currentPrize.tipoPremio === 'vale_dismac' ? (
                 (currentPrize.code || currentPrize.couponCode) && (
-                  <div className="mt-5 p-4 bg-[#FFFBF0] border-2 border-[#101010] rounded-2xl max-w-sm mx-auto shadow-sm">
-                    <div className="flex items-center justify-center gap-1.5 mb-1.5 text-xs font-black uppercase tracking-wider text-[#6F6756]">
-                      <Ticket className="w-4 h-4 text-[#FDC32B]" />
+                  <div className="mt-6 sm:mt-8 p-5 sm:p-7 bg-[#FFFBF0] border-2 sm:border-[2.5px] border-[#101010] rounded-2xl sm:rounded-3xl max-w-lg sm:max-w-xl mx-auto shadow-sm">
+                    <div className="flex items-center justify-center gap-2 mb-2.5 text-xs sm:text-sm font-black uppercase tracking-wider text-[#6F6756]">
+                      <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-[#FDC32B]" />
                       <span>Tu Cupón Dismac para Canjear:</span>
                     </div>
 
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="font-mono text-lg sm:text-xl font-black text-[#101010] tracking-widest bg-white px-3.5 py-1.5 rounded-xl border border-[#101010] select-all shadow-inner">
-                        {currentPrize.code || currentPrize.couponCode}
+                    <div className="flex flex-wrap sm:flex-nowrap items-center justify-center gap-2 sm:gap-3">
+                      <span className="font-mono text-xl sm:text-2xl md:text-3xl font-black text-[#101010] tracking-widest bg-white px-4 py-2 sm:px-6 sm:py-2.5 rounded-2xl border-2 border-[#101010] select-all shadow-inner">
+                        {revealedCodes['banner'] ? (currentPrize.code || currentPrize.couponCode) : '* * * * * *'}
                       </span>
 
-                      <button
-                        type="button"
-                        onClick={() => handleCopyCode(currentPrize.code || currentPrize.couponCode, 'banner')}
-                        className="px-3 py-2 bg-[#101010] hover:bg-[#252525] text-[#FDC32B] rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow active:scale-95 flex-none"
-                      >
-                        {copiedId === 'banner' ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>¡Copiado!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5" />
-                            <span>Copiar</span>
-                          </>
-                        )}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleCodeVisibility('banner')}
+                          className="p-2.5 sm:p-3 bg-white hover:bg-[#FDC32B] text-[#101010] border-2 border-[#101010] rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center cursor-pointer shadow-sm active:scale-95 flex-none"
+                          title={revealedCodes['banner'] ? 'Ocultar código' : 'Ver código'}
+                          aria-label={revealedCodes['banner'] ? 'Ocultar código' : 'Ver código'}
+                        >
+                          {revealedCodes['banner'] ? (
+                            <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" />
+                          ) : (
+                            <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleCopyCode(currentPrize.code || currentPrize.couponCode, 'banner')}
+                          className="px-4 py-2.5 sm:px-5 sm:py-3 bg-[#101010] hover:bg-[#252525] text-[#FDC32B] rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer shadow-md active:scale-95 flex-none"
+                        >
+                          {copiedId === 'banner' ? (
+                            <>
+                              <Check className="w-4 h-4 text-emerald-400" />
+                              <span>¡Copiado!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-4 h-4" />
+                              <span>Copiar</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                     {currentPrize.expirationDate && (
-                      <p className="text-[10px] text-[#8E887A] font-semibold mt-2">
+                      <p className="text-xs sm:text-sm text-[#8E887A] font-semibold mt-3">
                         Válido hasta: {formatExpirationDate(currentPrize.expirationDate)}
                       </p>
                     )}
                   </div>
                 )
               ) : (
-                <div className="mt-5 p-4 bg-[#F6FDF9] border-2 border-emerald-600 rounded-2xl max-w-md mx-auto shadow-sm text-center">
-                  <div className="flex items-center justify-center gap-1.5 mb-1 text-xs font-black uppercase tracking-wider text-emerald-800">
-                    <CreditCard className="w-4 h-4 text-emerald-600" />
+                <div className="mt-6 sm:mt-8 p-5 sm:p-7 bg-[#F6FDF9] border-2 border-emerald-600 rounded-2xl sm:rounded-3xl max-w-lg sm:max-w-xl mx-auto shadow-sm text-center">
+                  <div className="flex items-center justify-center gap-2 mb-1.5 text-xs sm:text-sm font-black uppercase tracking-wider text-emerald-800">
+                    <CreditCard className="w-5 h-5 text-emerald-600" />
                     <span>Modalidad: Transferencia Bancaria</span>
                   </div>
-                  <p className="text-[11px] text-[#6F6756] mt-1 leading-snug">
+                  <p className="text-xs sm:text-sm text-[#6F6756] mt-1 leading-snug">
                     No requiere cupón. Nuestro equipo coordinará la transferencia a tu número de celular registrado.
                   </p>
                 </div>
               )}
 
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
                 {activeCodeData && activeCodeData.intentosDisponibles > 0 ? (
                   <button
                     type="button"
                     onClick={handleResetForNextAttempt}
-                    className="bg-[#101010] hover:bg-[#252525] text-[#FDC32B] font-extrabold text-sm uppercase tracking-wider px-6 py-3.5 rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-2"
+                    className="bg-[#101010] hover:bg-[#252525] text-[#FDC32B] font-extrabold text-base sm:text-lg uppercase tracking-wider px-8 sm:px-10 py-4 sm:py-5 rounded-2xl transition-all shadow-lg active:scale-95 cursor-pointer flex items-center gap-2.5 border-2 border-[#101010]"
                   >
-                    <RotateCw className="w-4 h-4" />
+                    <RotateCw className="w-5 h-5" />
                     <span>
                       Girar de Nuevo ({activeCodeData.intentosDisponibles}{' '}
                       {activeCodeData.intentosDisponibles === 1 ? 'intento restante' : 'intentos restantes'})
@@ -710,13 +741,13 @@ export const GirarPage: React.FC = () => {
                   </button>
                 ) : (
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                    <div className="text-xs font-bold text-[#101010] bg-[#FFD95E] px-4 py-2.5 rounded-xl border border-[#101010]">
+                    <div className="text-xs sm:text-sm font-bold text-[#101010] bg-[#FFD95E] px-5 py-3 rounded-xl border border-[#101010]">
                       Todos los intentos de este código han sido canjeados
                     </div>
                     <button
                       type="button"
                       onClick={handleAbrirNuevoCodigo}
-                      className="bg-[#101010] hover:bg-[#252525] text-[#FDC32B] font-extrabold text-xs uppercase tracking-wider px-5 py-2.5 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-2 border border-[#101010]"
+                      className="bg-[#101010] hover:bg-[#252525] text-[#FDC32B] font-extrabold text-xs sm:text-sm uppercase tracking-wider px-6 py-3 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-2 border border-[#101010]"
                     >
                       <RotateCw className="w-4 h-4" />
                       <span>Girar con otro código</span>
@@ -748,6 +779,7 @@ export const GirarPage: React.FC = () => {
                   const coupon = premio.code || premio.couponCode || premio.ticketId;
                   const isDismac = activeCodeData.tipo === 'dismac' || premio.tipo === 'dismac' || premio.tipoPremio === 'vale_dismac';
                   const isCopied = copiedId === (premio.id || coupon);
+                  const isRevealed = !!revealedCodes[premio.id || coupon];
 
                   return (
                     <div
@@ -795,28 +827,40 @@ export const GirarPage: React.FC = () => {
                                 Cupón de canje Dismac
                               </span>
                               <span className="font-mono text-sm font-black text-[#101010] tracking-wider truncate select-all">
-                                {coupon}
+                                {isRevealed ? coupon : '* * * * * *'}
                               </span>
                             </div>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => handleCopyCode(coupon, premio.id || coupon)}
-                            className="px-2.5 py-1 bg-white hover:bg-[#FDC32B] text-[#101010] border border-[#101010]/30 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer flex-none shadow-sm active:scale-95"
-                          >
-                            {isCopied ? (
-                              <>
-                                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>Copiado</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="w-3.5 h-3.5" />
-                                <span>Copiar</span>
-                              </>
-                            )}
-                          </button>
+                          <div className="flex items-center gap-1.5 flex-none">
+                            <button
+                              type="button"
+                              onClick={() => toggleCodeVisibility(premio.id || coupon)}
+                              title={isRevealed ? 'Ocultar código' : 'Ver código'}
+                              aria-label={isRevealed ? 'Ocultar código' : 'Ver código'}
+                              className="p-1.5 bg-white hover:bg-[#FDC32B] text-[#101010] border border-[#101010]/30 rounded-lg text-xs font-bold transition-all flex items-center justify-center cursor-pointer shadow-sm active:scale-95"
+                            >
+                              {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleCopyCode(coupon, premio.id || coupon)}
+                              className="px-2.5 py-1 bg-white hover:bg-[#FDC32B] text-[#101010] border border-[#101010]/30 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer flex-none shadow-sm active:scale-95"
+                            >
+                              {isCopied ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Copiado</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Copiar</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="mt-3 pt-3 border-t border-[#E6DDC6]/70 flex items-center justify-between gap-2 bg-[#F6FDF9] rounded-xl px-3 py-2 border border-emerald-200">
@@ -840,6 +884,38 @@ export const GirarPage: React.FC = () => {
                   );
                 })}
               </div>
+
+              {/* Mensaje Informativo Único para Vales de Consumo abajo de toda la sección */}
+              {activeCodeData.premiosCanjeados.some((p) => {
+                const c = p.code || p.couponCode || p.ticketId;
+                const d = activeCodeData.tipo === 'dismac' || p.tipo === 'dismac' || p.tipoPremio === 'vale_dismac';
+                return d && Boolean(c);
+              }) && (
+                <div className="mt-5 p-4 sm:p-5 rounded-2xl bg-amber-50/95 border-2 border-amber-300 text-amber-950 shadow-sm text-left animate-fade-in">
+                  <p className="font-extrabold text-amber-900 flex items-center gap-2 mb-2 text-sm sm:text-base">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 flex-none" />
+                    <span>¡Importante! Guarda el código de tu Vale de Consumo</span>
+                  </p>
+                  <ul className="space-y-1 text-amber-950/90 text-xs sm:text-sm pl-1 list-none font-medium">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-amber-500 font-bold">•</span>
+                      <span>Utilízalo en una próxima compra antes de su fecha de vencimiento.</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-amber-500 font-bold">•</span>
+                      <span>Es válido para un solo uso.</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-amber-500 font-bold">•</span>
+                      <span>No aplica para cambios ni devoluciones.</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-amber-500 font-bold">•</span>
+                      <span>El cuidado y resguardo del código es tu responsabilidad.</span>
+                    </li>
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -971,9 +1047,22 @@ export const GirarPage: React.FC = () => {
                                           Cupón Dismac
                                         </span>
                                         <span className="font-mono text-xs sm:text-sm font-black text-[#00E5FF] tracking-wider select-all">
-                                          {coupon}
+                                          {revealedCodes[`modal-${premio.id || coupon}`] ? coupon : '* * * * * *'}
                                         </span>
                                       </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleCodeVisibility(`modal-${premio.id || coupon}`)}
+                                        title={revealedCodes[`modal-${premio.id || coupon}`] ? 'Ocultar código' : 'Ver código'}
+                                        aria-label={revealedCodes[`modal-${premio.id || coupon}`] ? 'Ocultar código' : 'Ver código'}
+                                        className="p-1 hover:bg-[#00E5FF]/20 text-slate-300 hover:text-[#00E5FF] rounded transition-colors cursor-pointer"
+                                      >
+                                        {revealedCodes[`modal-${premio.id || coupon}`] ? (
+                                          <EyeOff className="w-3.5 h-3.5" />
+                                        ) : (
+                                          <Eye className="w-3.5 h-3.5" />
+                                        )}
+                                      </button>
                                       <button
                                         type="button"
                                         onClick={() => handleCopyCode(coupon, premio.id || coupon)}
@@ -1086,9 +1175,22 @@ export const GirarPage: React.FC = () => {
                                           Cupón Dismac
                                         </span>
                                         <span className="font-mono text-xs sm:text-sm font-black text-[#00E5FF] tracking-wider select-all">
-                                          {coupon}
+                                          {revealedCodes[`modal-${premio.id || coupon}`] ? coupon : '* * * * * *'}
                                         </span>
                                       </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleCodeVisibility(`modal-${premio.id || coupon}`)}
+                                        title={revealedCodes[`modal-${premio.id || coupon}`] ? 'Ocultar código' : 'Ver código'}
+                                        aria-label={revealedCodes[`modal-${premio.id || coupon}`] ? 'Ocultar código' : 'Ver código'}
+                                        className="p-1 hover:bg-[#00E5FF]/20 text-slate-300 hover:text-[#00E5FF] rounded transition-colors cursor-pointer"
+                                      >
+                                        {revealedCodes[`modal-${premio.id || coupon}`] ? (
+                                          <EyeOff className="w-3.5 h-3.5" />
+                                        ) : (
+                                          <Eye className="w-3.5 h-3.5" />
+                                        )}
+                                      </button>
                                       <button
                                         type="button"
                                         onClick={() => handleCopyCode(coupon, premio.id || coupon)}
